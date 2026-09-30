@@ -7,7 +7,7 @@ from PySide6.QtCore import QObject, QTimer
 from ..domain.naming import MIX_TAP, NodeNames
 from ..services.metering import MeterReading, MeterSource
 
-FRAME_MS = 33
+FRAME_MS = 16
 
 
 def wanted_taps(slug: str, input_ids: Sequence[str], live: bool) -> dict[str, str]:
@@ -53,10 +53,11 @@ class MeterPump(QObject):
         """
         taps = wanted_taps(slug, input_ids, live)
         self._metering.sync(taps)
-        if taps:
-            self._timer.start()
-        else:
+        if not taps:
             self._timer.stop()
+            self._draw({})
+        elif not self._timer.isActive():
+            self._timer.start()
 
     def close(self) -> None:
         """Stop drawing and close every tap."""

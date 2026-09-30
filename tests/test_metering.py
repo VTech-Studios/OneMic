@@ -3,7 +3,7 @@ import threading
 import numpy as np
 import pytest
 
-from onemic.services.metering import BYTES_PER_COLUMN, ChannelMeter, Metering, TapReader, decode
+from onemic.services.metering import FRAMES_PER_READ, ChannelMeter, Metering, TapReader, decode
 from tests.fakes import FakeStream, FakeTaps
 
 
@@ -38,12 +38,12 @@ def test_meter_keeps_recent_columns_and_holds_the_peak() -> None:
 
 def test_reader_feeds_the_meter_until_the_stream_ends() -> None:
     meter = ChannelMeter()
-    stream = FakeStream([chunk((0.5, 0.5)) * (BYTES_PER_COLUMN // 8)] * 3)
+    stream = FakeStream([chunk((0.5, 0.5)) * FRAMES_PER_READ] * 3)
 
     reader = TapReader(stream, meter)
     reader.join()
 
-    assert len(meter.reading().columns) == 3
+    assert len(meter.reading().columns) == 6
     assert not reader.alive
 
 

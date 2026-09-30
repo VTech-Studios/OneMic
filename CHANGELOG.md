@@ -18,8 +18,9 @@ First release.
   speaker is playing.
 - Volume and mute for each input through its own gain stage, plus a master
   volume and mute for the mix.
-- Scrolling waveforms for each visible input and for the mix, coloured ice
-  blue, yellow when hot and red where clipped, with a held peak in dBFS.
+- Smoothly scrolling waveforms and DAW-style level meters for each visible
+  input and for the mix, on a decibel scale, coloured ice blue, yellow when
+  hot and red where clipped, with a held peak in dBFS.
   Inputs are metered before going live too, straight from their sources.
 - Listen, to hear exactly what the mic sends through the default output,
   blocked when it would feed back.

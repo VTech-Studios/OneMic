@@ -1,12 +1,18 @@
 from __future__ import annotations
 
+import math
+import time
+from collections.abc import Callable, Sequence
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QSlider, QToolButton, QVBoxLayout, QWidget
 
-from ..domain.levels import SILENCE_DB, LevelThresholds, amplitude_to_db
+from ..domain.levels import SILENCE_DB, LevelThresholds, MeterBallistics, amplitude_to_db
 from ..domain.profile import MAX_GAIN
+from ..domain.waveform import WaveColumn
 from ..services.metering import EMPTY_READING, MeterReading
 from ..services.routing import InputState
+from .level_meter import LevelMeter
 from .theme import Palette
 from .waveform import WaveformView
 from .widgets import tool_button
@@ -17,6 +23,21 @@ STATE_HINTS = {
     InputState.WAITING: "Waiting for this source to appear",
     InputState.LIVE: "Live",
 }
+
+
+def newest_peak(columns: Sequence[WaveColumn], after: float) -> tuple[float, float]:
+    """Find the loudest audio heard since a moment, scanning only the new columns.
+
+    @param columns: waveform columns, oldest first.
+    @param after: only columns heard after this time count.
+    @return: the loudest new peak (0.0 if nothing new), and the newest column's time.
+    """
+    peak, newest = 0.0, after
+    for column in reversed(columns):
+        if column.at <= after:
+            break
+        peak, newest = max(peak, column.peak), max(newest, column.at)
+    return peak, newest
 
 
 def format_peak(peak: float) -> str:
@@ -41,12 +62,22 @@ class ChannelRow(QWidget):
     remove_requested = Signal(str)
 
     def __init__(
-        self, key: str, palette: Palette, thresholds: LevelThresholds, parent: QWidget | None = None
+        self,
+        key: str,
+        palette: Palette,
+        thresholds: LevelThresholds,
+        parent: QWidget | None = None,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         super().__init__(parent)
         self.key = key
         self._palette = palette
         self._thresholds = thresholds
+        self._clock = clock
+        self._ballistics = MeterBallistics()
+        self._heard_until = -math.inf
+        self._last_frame = clock()
+        self._state: InputState | None = None
         self._title = QLabel()
         self._title.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self._peak_colour = ""
@@ -57,7 +88,8 @@ class ChannelRow(QWidget):
         self._peak.setObjectName("peak")
         self._peak.setFixedWidth(40)
         self._peak.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        self.waveform = WaveformView(palette, thresholds)
+        self.waveform = WaveformView(palette, thresholds, clock=clock)
+        self.meter = LevelMeter(palette, thresholds)
         self._build_layout()
         self._connect()
 
@@ -83,16 +115,27 @@ class ChannelRow(QWidget):
 
         @param state: how far the input has got towards being heard.
         """
+        if state is self._state:
+            return
+        self._state = state
         colour = self._palette.text if state is InputState.LIVE else self._palette.dim
         self._title.setStyleSheet(f"color: {colour};")
         self.setToolTip(STATE_HINTS[state])
 
     def set_reading(self, reading: MeterReading) -> None:
-        """Show the latest waveform and held peak.
+        """Show the latest waveform, level and held peak.
+
+        Called every frame. The level meter jumps to anything new since the
+        last frame and otherwise falls smoothly, so it tracks the signal live.
 
         @param reading: the meter's current state; EMPTY_READING when not metering.
         """
+        now = self._clock()
+        peak, self._heard_until = newest_peak(reading.columns, self._heard_until)
+        level = self._ballistics.update(peak, now - self._last_frame)
+        self._last_frame = now
         self.waveform.set_columns(reading.columns)
+        self.meter.set_level(level, amplitude_to_db(reading.held_peak))
         self._peak.setText(format_peak(reading.held_peak))
         self._colour_peak(reading.held_peak)
 
@@ -145,6 +188,7 @@ class ChannelRow(QWidget):
         column.setSpacing(3)
         column.addLayout(controls)
         column.addWidget(self.waveform)
+        column.addWidget(self.meter)
 
     def _connect(self) -> None:
         self._slider.valueChanged.connect(self._on_slider)

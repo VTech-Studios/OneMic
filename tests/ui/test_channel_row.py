@@ -5,7 +5,7 @@ from onemic.domain.levels import LevelThresholds
 from onemic.domain.waveform import WaveColumn
 from onemic.services.metering import MeterReading
 from onemic.services.routing import InputState
-from onemic.ui.channel_row import ChannelRow, format_peak
+from onemic.ui.channel_row import ChannelRow, format_peak, newest_peak
 from onemic.ui.theme import Palette
 
 
@@ -65,3 +65,24 @@ def test_state_dims_the_title_until_live(row: ChannelRow) -> None:
 
     row.set_state(InputState.LIVE)
     assert Palette().text in row._title.styleSheet()
+
+
+def test_newest_peak_only_counts_columns_since_the_last_frame() -> None:
+    history = [WaveColumn(-0.9, 0.9, 1.0), WaveColumn(-0.2, 0.2, 2.0), WaveColumn(-0.4, 0.1, 3.0)]
+
+    assert newest_peak(history, after=1.0) == (0.4, 3.0)
+    assert newest_peak(history, after=3.0) == (0.0, 3.0)
+
+
+def test_the_level_meter_follows_new_audio(qtbot: QtBot) -> None:
+    now = [10.0]
+    widget = ChannelRow("v1", Palette(), LevelThresholds(), clock=lambda: now[0])
+    qtbot.addWidget(widget)
+
+    widget.set_reading(MeterReading((WaveColumn(-0.5, 0.5, 9.99),), 0.5))
+    loud = widget.meter._level_db
+    now[0] = 10.5
+    widget.set_reading(MeterReading((WaveColumn(-0.5, 0.5, 9.99),), 0.5))
+
+    assert loud == pytest.approx(-6.02, abs=0.01)
+    assert widget.meter._level_db == pytest.approx(loud - 12.0, abs=0.01)

@@ -25,7 +25,7 @@ and applications come and go.
 | Up to 8 inputs per mic | Any microphone or interface input, any application playing audio (REAPER, a browser), or anything a speaker is playing. |
 | Volume and mute per input | Set each signal without touching the source itself, so REAPER still records and monitors exactly as before. |
 | Master volume and mute | For the mix as a whole, which is what the call hears. |
-| Live waveforms | A scrolling waveform for each input and for the mix. Ice blue when fine, yellow when running hot, red where it clipped. |
+| Live waveforms and meters | A smoothly scrolling waveform and a DAW-style level meter for each input and for the mix. Ice blue when fine, yellow when running hot, red where it clipped. |
 | Peak readout with hold | The highest recent peak in dBFS next to each waveform, held long enough to read. |
 | Listen | Hear exactly what the mic is sending, through your default output. |
 | Auto-relink | Opened REAPER after going live? Replugged the interface? OneMic links it back within a second. |
@@ -138,8 +138,14 @@ show whatever name you pick, so something like `Guitar Lesson` is easy to find i
 
 ### Setting levels
 
-Each row has a mute button (**M**), a volume slider from 0 to 150%, the held peak in dBFS, and the
-waveform. The bottom row is the mix, which is exactly what the call hears.
+Each row has a mute button (**M**), a volume slider from 0 to 150%, the held peak in dBFS, the
+waveform, and a thin level meter under it. The bottom row is the mix, which is exactly what the call
+hears.
+
+The meter is the live part: it jumps the instant a sound starts and falls back smoothly, with a white
+tick marking the recent peak, just like a DAW's track meter. The waveform shows the last few seconds
+scrolling past. Both use a decibel scale from -60 dBFS to full scale, the way DAW meters do, so a voice
+at a normal speaking level fills a good part of the lane rather than a sliver.
 
 | Colour | Peak | Meaning |
 | --- | --- | --- |

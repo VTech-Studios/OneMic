@@ -27,6 +27,32 @@ def amplitude_to_db(amplitude: float) -> float:
     return max(SILENCE_DB, 20.0 * math.log10(amplitude))
 
 
+DISPLAY_FLOOR_DB = -60.0
+
+
+def db_to_fraction(db: float, floor_db: float = DISPLAY_FLOOR_DB) -> float:
+    """Place a level on a display that is linear in decibels.
+
+    Meters and waveforms both use this scale, as DAW meters do, so quiet
+    signals such as a voice at -30 dBFS fill a useful part of the display
+    instead of a sliver next to the silence line.
+
+    @param db: the level in dBFS.
+    @param floor_db: the level shown as empty.
+    @return: 0.0 at the floor to 1.0 at full scale, clamped.
+    """
+    return min(max((db - floor_db) / -floor_db, 0.0), 1.0)
+
+
+def display_height(sample: float) -> float:
+    """Scale a signed sample for drawing, keeping its sign.
+
+    @param sample: a sample value, where 1.0 is full scale.
+    @return: -1.0 to 1.0, linear in decibels between the display floor and full scale.
+    """
+    return math.copysign(db_to_fraction(amplitude_to_db(abs(sample))), sample)
+
+
 @dataclass(frozen=True)
 class LevelThresholds:
     """Where a signal stops being safe to send.
@@ -51,6 +77,35 @@ class LevelThresholds:
         if db >= self.hot_db:
             return Level.HOT
         return Level.SAFE
+
+
+@dataclass
+class MeterBallistics:
+    """How a level meter moves: straight up to a new peak, then a steady fall.
+
+    Rising instantly is what makes a meter feel live, since it jumps the
+    moment you play. Falling at a fixed rate in decibels, as a DAW's meters
+    do, keeps it readable instead of flickering with every sample.
+    """
+
+    fall_db_per_second: float = 24.0
+    floor_db: float = -60.0
+    _level_db: float = field(default=-60.0, init=False)
+
+    @property
+    def level_db(self) -> float:
+        return self._level_db
+
+    def update(self, peak: float, elapsed: float) -> float:
+        """Move the meter towards the latest peak.
+
+        @param peak: absolute peak amplitude heard since the last update.
+        @param elapsed: seconds since the last update.
+        @return: the level to show, in dBFS, never below floor_db.
+        """
+        fallen = self._level_db - self.fall_db_per_second * max(elapsed, 0.0)
+        self._level_db = max(amplitude_to_db(peak), fallen, self.floor_db)
+        return self._level_db
 
 
 @dataclass

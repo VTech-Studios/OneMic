@@ -127,3 +127,17 @@ def test_the_window_is_placed_in_its_corner(window: MainWindow) -> None:
 
     assert window.x() == area.left() + 12
     assert window.y() == area.top() + 12
+
+
+def test_status_updates_never_blank_the_meters(window: MainWindow) -> None:
+    window.show_status(SessionStatus())
+    reading = MeterReading((WaveColumn(-0.5, 0.5),), 0.5)
+    window.show_levels({"i0": reading})
+    style = window._rows["i0"]._title.styleSheet()
+
+    for _ in range(3):
+        window.show_status(SessionStatus())
+
+    assert window._rows["i0"]._peak.text() == "-6.0"
+    assert window._rows["i0"].waveform._columns == reading.columns
+    assert window._rows["i0"]._title.styleSheet() == style

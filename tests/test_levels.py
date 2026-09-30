@@ -2,7 +2,16 @@ import math
 
 import pytest
 
-from onemic.domain.levels import SILENCE_DB, Level, LevelThresholds, PeakHold, amplitude_to_db
+from onemic.domain.levels import (
+    SILENCE_DB,
+    Level,
+    LevelThresholds,
+    MeterBallistics,
+    PeakHold,
+    amplitude_to_db,
+    db_to_fraction,
+    display_height,
+)
 
 
 @pytest.mark.parametrize(
@@ -69,3 +78,31 @@ def test_peak_hold_reset_forgets_the_peak() -> None:
 
     assert hold.peak == 0.1
     assert not math.isnan(hold.peak)
+
+
+@pytest.mark.parametrize(
+    ("db", "fraction"), [(0.0, 1.0), (-30.0, 0.5), (-60.0, 0.0), (-90.0, 0.0), (6.0, 1.0)]
+)
+def test_db_to_fraction(db: float, fraction: float) -> None:
+    assert db_to_fraction(db) == fraction
+
+
+def test_display_height_keeps_the_sign() -> None:
+    assert display_height(0.5) == pytest.approx(0.8997, abs=1e-3)
+    assert display_height(-0.5) == pytest.approx(-0.8997, abs=1e-3)
+    assert display_height(0.0) == 0.0
+
+
+def test_meter_rises_instantly_and_falls_steadily() -> None:
+    meter = MeterBallistics(fall_db_per_second=24.0)
+
+    assert meter.update(1.0, elapsed=0.0) == 0.0
+    assert meter.update(0.0, elapsed=0.5) == -12.0
+    assert meter.update(0.0, elapsed=10.0) == -60.0
+
+
+def test_meter_jumps_to_a_louder_peak_mid_fall() -> None:
+    meter = MeterBallistics()
+    meter.update(0.1, elapsed=0.0)
+
+    assert meter.update(0.5, elapsed=0.1) == pytest.approx(-6.02, abs=0.01)

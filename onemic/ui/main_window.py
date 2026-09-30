@@ -95,14 +95,13 @@ class MainWindow(QWidget):
 
         @param status: the session's latest status.
         """
-        self._live = status.live
         self.header.show_status(status.live, status.listening, status.listen_blocked)
         for key, row in self._rows.items():
             row.set_state(status.inputs.get(key, InputState.OFF) if status.live else InputState.OFF)
         self._mix.set_state(InputState.LIVE if status.live else InputState.OFF)
-        if not status.live:
-            self.show_levels({})
-        self.update()
+        if status.live != self._live:
+            self._live = status.live
+            self.update()
 
     def show_levels(self, readings: Mapping[str, MeterReading]) -> None:
         """Draw the latest waveforms and peaks on the rows that are visible.

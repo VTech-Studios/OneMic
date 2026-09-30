@@ -12,13 +12,15 @@ import numpy as np
 
 from ..domain.errors import AudioError
 from ..domain.levels import PeakHold
-from ..domain.waveform import Samples, WaveColumn, summarise
+from ..domain.waveform import Samples, WaveColumn, split_columns
 from ..ports import ByteStream, SignalTapFactory
 
 CHANNELS = 2
-FRAMES_PER_COLUMN = 1024
-BYTES_PER_COLUMN = FRAMES_PER_COLUMN * CHANNELS * 4
-HISTORY_COLUMNS = 480
+RATE = 48000
+FRAMES_PER_COLUMN = 512
+FRAMES_PER_READ = 1024
+BYTES_PER_READ = FRAMES_PER_READ * CHANNELS * 4
+HISTORY_COLUMNS = 600
 
 log = logging.getLogger(__name__)
 
@@ -58,15 +60,16 @@ class ChannelMeter:
         self._clock = clock
         self._lock = threading.Lock()
 
-    def push(self, block: Samples) -> None:
-        """Add a block of samples as the newest waveform column.
+    def push(self, chunk: Samples) -> None:
+        """Add a chunk of samples as the newest waveform columns.
 
-        @param block: samples shaped (frames, channels).
+        @param chunk: samples shaped (frames, channels), just arrived.
         """
-        column = summarise(block)
+        now = self._clock()
+        columns = split_columns(chunk, FRAMES_PER_COLUMN, now, RATE)
         with self._lock:
-            self._columns.append(column)
-            self._hold.update(column.peak, self._clock())
+            self._columns.extend(columns)
+            self._hold.update(max(column.peak for column in columns), now)
 
     def reading(self) -> MeterReading:
         """Copy the current waveform and held peak for drawing.
@@ -103,7 +106,7 @@ class TapReader:
         self._thread.join(timeout=2.0)
 
     def _run(self) -> None:
-        while chunk := self._stream.read(BYTES_PER_COLUMN):
+        while chunk := self._stream.read(BYTES_PER_READ):
             self.meter.push(decode(chunk))
 
 
