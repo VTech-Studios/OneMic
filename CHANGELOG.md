@@ -16,8 +16,8 @@ First release.
   switchable, with create, copy, rename and delete.
 - Up to eight inputs per mic from microphones, applications, or anything a
   speaker is playing.
-- Volume and mute for each input through its own gain stage, plus a master
-  volume and mute for the mix.
+- Volume, mute and solo for each input through its own gain stage, plus a
+  master volume and mute for the mix.
 - Smoothly scrolling waveforms and DAW-style level meters for each visible
   input and for the mix, on a decibel scale, coloured ice blue, yellow when
   hot and red where clipped, with a held peak in dBFS.

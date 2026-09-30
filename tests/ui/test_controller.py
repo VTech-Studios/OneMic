@@ -307,3 +307,13 @@ def test_inputs_are_metered_before_going_live(qtbot: QtBot, harness: Harness) ->
     go_live(qtbot, harness)
 
     assert NAMES.mix_tap in harness.taps.opened
+
+
+def test_solo_is_saved_and_applied(qtbot: QtBot, harness: Harness) -> None:
+    harness.controller.start()
+    go_live(qtbot, harness)
+
+    harness.window._rows["v1"]._solo.click()
+
+    qtbot.waitUntil(lambda: harness.store.saves >= 1)
+    assert harness.store.profiles[0].inputs[0].soloed

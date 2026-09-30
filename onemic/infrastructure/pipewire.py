@@ -117,8 +117,17 @@ def _links(objects: Sequence[JsonObject]) -> frozenset[Link]:
 
 
 def _default_sink(objects: Sequence[JsonObject]) -> str | None:
+    """Find the default output's name in the default metadata object.
+
+    Unlike nodes and ports, pw-dump prints a metadata object's properties
+    at the top level rather than under "info".
+
+    @param objects: the decoded array pw-dump prints.
+    @return: the default output's node name, or None if none is set.
+    """
     for item in _of_type(objects, _METADATA):
-        if _props(item).get("metadata.name") != "default":
+        props: JsonObject = item.get("props") or {}
+        if props.get("metadata.name") != "default":
             continue
         for entry in item.get("metadata") or []:
             if entry.get("key") == "default.audio.sink":

@@ -141,3 +141,11 @@ def test_status_updates_never_blank_the_meters(window: MainWindow) -> None:
     assert window._rows["i0"]._peak.text() == "-6.0"
     assert window._rows["i0"].waveform._columns == reading.columns
     assert window._rows["i0"]._title.styleSheet() == style
+
+
+def test_inputs_can_be_soloed_but_the_mix_cannot(qtbot: QtBot, window: MainWindow) -> None:
+    with qtbot.waitSignal(window.input_solo_toggled) as soloed:
+        window._rows["i0"]._solo.click()
+
+    assert soloed.args == ["i0", True]
+    assert window._mix._solo.isHidden()

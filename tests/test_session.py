@@ -324,3 +324,13 @@ def test_preview_changes_nothing_while_live(wire: FakePipeWire) -> None:
 
     assert session.preview(LESSON).live
     assert wire.links == links
+
+
+def test_soloing_an_input_mutes_the_others_on_the_mic(wire: FakePipeWire) -> None:
+    session = session_for(wire)
+    session.go_live(LESSON)
+
+    session.apply_levels(LESSON.with_input_soloed("g1", True))
+
+    assert wire.mutes[wire.node(NAMES.stage_output("v1")).id] is True
+    assert wire.mutes[wire.node(NAMES.stage_output("g1")).id] is False

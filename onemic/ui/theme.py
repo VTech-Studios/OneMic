@@ -55,7 +55,10 @@ def stylesheet(palette: Palette) -> str:
     QPushButton#live {{ font-weight: bold; padding: 3px 10px; }}
     QPushButton#live:checked {{ background: {palette.live}; border-color: {palette.live}; color: white; }}
     QToolButton:checked {{ background: {palette.ice}; color: {palette.background}; }}
-    QToolButton#mute, QToolButton#remove {{ padding: 0; font-weight: bold; }}
+    QToolButton#mute, QToolButton#solo, QToolButton#remove {{ padding: 0; font-weight: bold; }}
+    QToolButton#solo:checked {{
+        background: {palette.hot}; color: {palette.background}; border-color: {palette.hot};
+    }}
     QToolButton#mute:checked {{ background: {palette.muted}; color: white; border-color: {palette.muted}; }}
     QToolButton::menu-indicator {{ image: none; width: 0; }}
     QSlider::groove:horizontal {{ height: 3px; background: {palette.border}; border-radius: 1px; }}

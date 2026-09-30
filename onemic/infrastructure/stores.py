@@ -59,6 +59,7 @@ def _input_to_json(settings: InputSettings) -> dict[str, Any]:
         "label": settings.label,
         "gain": settings.gain,
         "muted": settings.muted,
+        "soloed": settings.soloed,
     }
 
 
@@ -69,6 +70,7 @@ def _input_from_json(item: Mapping[str, Any]) -> InputSettings:
         label=str(item.get("label") or item["source"]),
         gain=clamp_gain(float(item.get("gain", 1.0))),
         muted=bool(item.get("muted", False)),
+        soloed=bool(item.get("soloed", False)),
     )
 
 

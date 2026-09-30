@@ -59,6 +59,7 @@ class ChannelRow(QWidget):
 
     gain_changed = Signal(str, float)
     mute_toggled = Signal(str, bool)
+    solo_toggled = Signal(str, bool)
     remove_requested = Signal(str)
 
     def __init__(
@@ -82,6 +83,9 @@ class ChannelRow(QWidget):
         self._title.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self._peak_colour = ""
         self._mute = self._small_button(tool_button("M", "Mute", checkable=True, name="mute"))
+        self._solo = self._small_button(
+            tool_button("S", "Solo: hear only soloed inputs, on the call too", checkable=True, name="solo")
+        )
         self._remove = self._small_button(tool_button("✕", "Remove this input", name="remove"))
         self._slider = self._gain_slider()
         self._peak = QLabel(format_peak(0.0))
@@ -93,22 +97,32 @@ class ChannelRow(QWidget):
         self._build_layout()
         self._connect()
 
-    def set_values(self, label: str, gain: float, muted: bool) -> None:
+    def set_values(self, label: str, gain: float, muted: bool, soloed: bool = False) -> None:
         """Show saved settings without echoing them back as user changes.
 
         @param label: the name to show.
         @param gain: the gain, where 1.0 is unity.
         @param muted: the mute state.
+        @param soloed: the solo state.
         """
         self._title.setText(label)
         self._title.setToolTip(label)
-        for widget in (self._slider, self._mute):
+        controls = (self._slider, self._mute, self._solo)
+        for widget in controls:
             widget.blockSignals(True)
         self._slider.setValue(round(gain * 100))
         self._slider.setToolTip(f"{round(gain * 100)}%")
         self._mute.setChecked(muted)
-        for widget in (self._slider, self._mute):
+        self._solo.setChecked(soloed)
+        for widget in controls:
             widget.blockSignals(False)
+
+    def set_soloable(self, soloable: bool) -> None:
+        """Show the solo button only on inputs, since soloing the mix itself means nothing.
+
+        @param soloable: False for the mix row.
+        """
+        self._solo.setVisible(soloable)
 
     def set_state(self, state: InputState) -> None:
         """Dim the name while the signal is not reaching the mic.
@@ -179,6 +193,7 @@ class ChannelRow(QWidget):
         controls = QHBoxLayout()
         controls.setSpacing(6)
         controls.addWidget(self._mute)
+        controls.addWidget(self._solo)
         controls.addWidget(self._title, 1)
         controls.addWidget(self._slider)
         controls.addWidget(self._peak)
@@ -193,6 +208,7 @@ class ChannelRow(QWidget):
     def _connect(self) -> None:
         self._slider.valueChanged.connect(self._on_slider)
         self._mute.toggled.connect(lambda muted: self.mute_toggled.emit(self.key, muted))
+        self._solo.toggled.connect(lambda soloed: self.solo_toggled.emit(self.key, soloed))
         self._remove.clicked.connect(lambda: self.remove_requested.emit(self.key))
 
     def _on_slider(self, value: int) -> None:

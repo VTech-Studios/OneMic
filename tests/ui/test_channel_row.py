@@ -86,3 +86,14 @@ def test_the_level_meter_follows_new_audio(qtbot: QtBot) -> None:
 
     assert loud == pytest.approx(-6.02, abs=0.01)
     assert widget.meter._level_db == pytest.approx(loud - 12.0, abs=0.01)
+
+
+def test_solo_reports_the_row_key_and_shows_without_echo(qtbot: QtBot, row: ChannelRow) -> None:
+    with qtbot.assertNotEmitted(row.solo_toggled):
+        row.set_values("Voice", 1.0, muted=False, soloed=True)
+    assert row._solo.isChecked()
+
+    with qtbot.waitSignal(row.solo_toggled) as soloed:
+        row._solo.click()
+
+    assert soloed.args == ["v1", False]

@@ -44,6 +44,7 @@ class MainWindow(QWidget):
 
     input_gain_changed = Signal(str, float)
     input_mute_toggled = Signal(str, bool)
+    input_solo_toggled = Signal(str, bool)
     input_remove_requested = Signal(str)
     mix_gain_changed = Signal(float)
     mix_mute_toggled = Signal(bool)
@@ -86,7 +87,7 @@ class MainWindow(QWidget):
         if list(self._rows) != [settings.id for settings in profile.inputs]:
             self._rebuild_rows(profile)
         for settings in profile.inputs:
-            self._rows[settings.id].set_values(settings.label, settings.gain, settings.muted)
+            self._rows[settings.id].set_values(settings.label, settings.gain, settings.muted, settings.soloed)
         self._mix.set_values(f"Mix → {profile.name}", profile.gain, profile.muted)
         self._update_visibility()
 
@@ -190,6 +191,7 @@ class MainWindow(QWidget):
     def _make_mix_row(self) -> ChannelRow:
         row = ChannelRow(MIX_TAP, self._palette, self._thresholds)
         row.set_removable(False)
+        row.set_soloable(False)
         row.gain_changed.connect(lambda _, gain: self.mix_gain_changed.emit(gain))
         row.mute_toggled.connect(lambda _, muted: self.mix_mute_toggled.emit(muted))
         return row
@@ -202,6 +204,7 @@ class MainWindow(QWidget):
             row = ChannelRow(settings.id, self._palette, self._thresholds)
             row.gain_changed.connect(self.input_gain_changed.emit)
             row.mute_toggled.connect(self.input_mute_toggled.emit)
+            row.solo_toggled.connect(self.input_solo_toggled.emit)
             row.remove_requested.connect(self.input_remove_requested.emit)
             self._inputs.addWidget(row)
             self._rows[settings.id] = row

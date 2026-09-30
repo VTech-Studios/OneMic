@@ -261,7 +261,9 @@ class MicSession:
         names = NodeNames(profile.slug)
         self._levels.apply(graph.node(names.mic), profile.gain, profile.muted)
         for settings in profile.inputs:
-            self._levels.apply(graph.node(names.stage_output(settings.id)), settings.gain, settings.muted)
+            self._levels.apply(
+                graph.node(names.stage_output(settings.id)), settings.gain, profile.is_silenced(settings)
+            )
 
     @staticmethod
     def _try(action: Callable[[Link], None], link: Link) -> None:

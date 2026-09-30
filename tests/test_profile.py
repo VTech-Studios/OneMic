@@ -85,3 +85,23 @@ def test_renaming_validates_and_changes_the_slug() -> None:
     assert renamed.slug == "new-name"
     with pytest.raises(ProfileError):
         renamed.renamed('bad"name')
+
+
+def test_solo_silences_every_input_that_is_not_soloed() -> None:
+    profile = MicProfile("L", (GUITAR, VOICE)).with_input_soloed("g1", True)
+
+    assert not profile.is_silenced(profile.input("g1"))
+    assert profile.is_silenced(profile.input("v1"))
+
+
+def test_without_solo_only_mute_silences() -> None:
+    profile = MicProfile("L", (GUITAR, VOICE)).with_input_muted("v1", True)
+
+    assert profile.is_silenced(profile.input("v1"))
+    assert not profile.is_silenced(profile.input("g1"))
+
+
+def test_mute_wins_over_solo() -> None:
+    profile = MicProfile("L", (GUITAR,)).with_input_soloed("g1", True).with_input_muted("g1", True)
+
+    assert profile.is_silenced(profile.input("g1"))

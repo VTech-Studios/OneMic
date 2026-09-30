@@ -43,7 +43,6 @@ DUMP: list[dict[str, Any]] = [
         "id": 80,
         "type": "PipeWire:Interface:Metadata",
         "props": {"metadata.name": "default"},
-        "info": {"props": {"metadata.name": "default"}},
         "metadata": [{"subject": 0, "key": "default.audio.sink", "value": {"name": "speakers"}}],
     },
 ]

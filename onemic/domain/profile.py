@@ -68,6 +68,7 @@ class InputSettings:
     label: str
     gain: float = 1.0
     muted: bool = False
+    soloed: bool = False
 
 
 @dataclass(frozen=True)
@@ -131,6 +132,28 @@ class MicProfile:
         @return: a copy of the mic with the new mute state.
         """
         return self._replace_input(replace(self.input(input_id), muted=muted))
+
+    def with_input_soloed(self, input_id: str, soloed: bool) -> MicProfile:
+        """Solo or unsolo one input.
+
+        @param input_id: the input's generated id.
+        @param soloed: True to hear this input alongside any other soloed ones only.
+        @return: a copy of the mic with the new solo state.
+        """
+        return self._replace_input(replace(self.input(input_id), soloed=soloed))
+
+    def is_silenced(self, settings: InputSettings) -> bool:
+        """Decide whether an input is heard, taking every input's solo into account.
+
+        Solo works as it does in a DAW: while any input is soloed, only
+        soloed inputs are heard. Mute still wins, so a muted input stays
+        silent even when soloed.
+
+        @param settings: one of this mic's inputs.
+        @return: True if the input should be silent.
+        """
+        any_soloed = any(item.soloed for item in self.inputs)
+        return settings.muted or (any_soloed and not settings.soloed)
 
     def with_gain(self, gain: float) -> MicProfile:
         """Change the master gain applied to the whole mix.

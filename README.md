@@ -23,7 +23,7 @@ and applications come and go.
 | --- | --- |
 | Named virtual mics | Each mic is a real PipeWire device, listed in call apps as `<name> (OneMic)`. Save as many as you like and switch between them. |
 | Up to 8 inputs per mic | Any microphone or interface input, any application playing audio (REAPER, a browser), or anything a speaker is playing. |
-| Volume and mute per input | Set each signal without touching the source itself, so REAPER still records and monitors exactly as before. |
+| Volume, mute and solo per input | Set each signal without touching the source itself, so REAPER still records and monitors exactly as before. |
 | Master volume and mute | For the mix as a whole, which is what the call hears. |
 | Live waveforms and meters | A smoothly scrolling waveform and a DAW-style level meter for each input and for the mix. Ice blue when fine, yellow when running hot, red where it clipped. |
 | Peak readout with hold | The highest recent peak in dBFS next to each waveform, held long enough to read. |
@@ -138,9 +138,13 @@ show whatever name you pick, so something like `Guitar Lesson` is easy to find i
 
 ### Setting levels
 
-Each row has a mute button (**M**), a volume slider from 0 to 150%, the held peak in dBFS, the
+Each input row has a mute button (**M**), a solo button (**S**), a volume slider from 0 to 150%, the held peak in dBFS, the
 waveform, and a thin level meter under it. The bottom row is the mix, which is exactly what the call
 hears.
+
+Solo works as it does in a DAW: while any input is soloed, only soloed inputs are heard, and mute
+still wins over solo. Because the mix is what the call hears, solo applies to the call too, so it is a
+quick way to send only your guitar for a moment. Solo is saved with the mic, like mute.
 
 The meter is the live part: it jumps the instant a sound starts and falls back smoothly, with a white
 tick marking the recent peak, just like a DAW's track meter. The waveform shows the last few seconds

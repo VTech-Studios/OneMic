@@ -7,7 +7,10 @@ from onemic.infrastructure.stores import JsonProfileStore, JsonWindowStateStore
 
 LESSON = MicProfile(
     "Guitar Lesson",
-    (InputSettings("a1", "REAPER", "REAPER", 0.8), InputSettings("b2", "mic2", "Voice", muted=True)),
+    (
+        InputSettings("a1", "REAPER", "REAPER", 0.8, soloed=True),
+        InputSettings("b2", "mic2", "Voice", muted=True),
+    ),
     gain=0.9,
 )
 

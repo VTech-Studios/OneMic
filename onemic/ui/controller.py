@@ -93,6 +93,9 @@ class AppController(QObject):
         window.input_mute_toggled.connect(
             lambda key, muted: self._edit_levels(lambda profile: profile.with_input_muted(key, muted))
         )
+        window.input_solo_toggled.connect(
+            lambda key, soloed: self._edit_levels(lambda profile: profile.with_input_soloed(key, soloed))
+        )
         window.mix_gain_changed.connect(
             lambda gain: self._edit_levels(lambda profile: profile.with_gain(gain))
         )
