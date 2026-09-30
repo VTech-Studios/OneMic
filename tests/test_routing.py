@@ -20,8 +20,10 @@ def built(listening_sink: bool = True) -> FakePipeWire:
     return wire
 
 
-def apply(wire: FakePipeWire, listening: bool = False) -> None:
-    routing = route(PROFILE, wire.snapshot(), listening)
+def apply(
+    wire: FakePipeWire, listening: bool = False, heard: frozenset[str] = frozenset({"speakers"})
+) -> None:
+    routing = route(PROFILE, wire.snapshot(), listening, heard)
     for link in routing.to_remove:
         wire.unlink(link)
     for link in routing.to_create:
@@ -68,6 +70,29 @@ def test_listening_links_the_mic_to_the_default_output_and_unlinks_after() -> No
 
     apply(wire, listening=False)
     assert not wire.linked(NAMES.mic, "speakers")
+
+
+def test_listening_through_a_duplex_device_is_undone_too() -> None:
+    wire = built()
+    wire.add_node("interface", "Audio/Duplex", inputs=2, outputs=2)
+    wire.default_sink = "interface"
+
+    apply(wire, listening=True, heard=frozenset({"interface"}))
+    assert wire.linked(NAMES.mic, "interface")
+
+    apply(wire, listening=False, heard=frozenset({"interface"}))
+    assert not wire.linked(NAMES.mic, "interface")
+
+
+def test_a_link_made_by_hand_to_another_output_is_left_alone() -> None:
+    wire = built()
+    other = wire.add_node("headset", "Audio/Sink", inputs=2)
+    by_hand = Link(wire.node(NAMES.mic).outputs[0].id, other.inputs[0].id)
+    wire.link(by_hand)
+
+    apply(wire, listening=False)
+
+    assert by_hand in wire.links
 
 
 def test_listening_is_blocked_when_the_default_output_is_an_input() -> None:

@@ -5,7 +5,7 @@ from collections.abc import Callable, Mapping, Sequence
 from PySide6.QtCore import QObject, QTimer
 
 from ..domain.naming import MIX_TAP, NodeNames
-from ..services.metering import Metering, MeterReading
+from ..services.metering import MeterReading, MeterSource
 
 FRAME_MS = 33
 
@@ -33,7 +33,7 @@ class MeterPump(QObject):
 
     def __init__(
         self,
-        metering: Metering,
+        metering: MeterSource,
         draw: Callable[[Mapping[str, MeterReading]], None],
         parent: QObject | None = None,
     ) -> None:

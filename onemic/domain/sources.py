@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
+from . import media
 from .graph import Graph, Node
 from .naming import is_onemic_node
 
@@ -21,12 +22,12 @@ class AudioSource:
 
 
 _KIND_BY_CLASS = {
-    "Audio/Source": SourceKind.MICROPHONE,
-    "Audio/Source/Virtual": SourceKind.MICROPHONE,
-    "Audio/Duplex": SourceKind.MICROPHONE,
-    "Audio/Sink": SourceKind.PLAYBACK,
-    "Stream/Output/Audio": SourceKind.APPLICATION,
-    "Stream/Duplex/Audio": SourceKind.APPLICATION,
+    media.SOURCE: SourceKind.MICROPHONE,
+    media.VIRTUAL_SOURCE: SourceKind.MICROPHONE,
+    media.DUPLEX: SourceKind.MICROPHONE,
+    media.SINK: SourceKind.PLAYBACK,
+    media.APPLICATION_OUTPUT: SourceKind.APPLICATION,
+    media.APPLICATION_DUPLEX: SourceKind.APPLICATION,
 }
 
 

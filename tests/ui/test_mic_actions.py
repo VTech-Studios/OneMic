@@ -6,7 +6,7 @@ from tests.fakes import InMemoryProfileStore
 
 def actions(live: str | None = None) -> tuple[LibraryMicActions, ProfileLibrary]:
     library = ProfileLibrary(InMemoryProfileStore([MicProfile("Lesson"), MicProfile("Stream")]))
-    return LibraryMicActions(library, lambda: live), library
+    return LibraryMicActions(library, lambda: {live} if live else set()), library
 
 
 def test_successful_actions_return_no_error() -> None:

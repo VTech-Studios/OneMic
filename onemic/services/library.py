@@ -32,7 +32,7 @@ class ProfileLibrary:
         self._new_id = new_id
         profiles, selected = store.load()
         self._profiles = profiles or [MicProfile(DEFAULT_NAME)]
-        self._selected = selected if self._find(selected) else self._profiles[0].slug
+        self._selected = selected if self.find(selected) else self._profiles[0].slug
 
     @property
     def profiles(self) -> tuple[MicProfile, ...]:
@@ -40,7 +40,7 @@ class ProfileLibrary:
 
     @property
     def selected(self) -> MicProfile:
-        profile = self._find(self._selected)
+        profile = self.find(self._selected)
         if profile is None:
             raise ProfileError("The selected mic no longer exists.")
         return profile
@@ -52,7 +52,7 @@ class ProfileLibrary:
         @return: the mic.
         @raise ProfileError: if no mic has that slug.
         """
-        profile = self._find(slug)
+        profile = self.find(slug)
         if profile is None:
             raise ProfileError("That mic no longer exists.")
         return profile
@@ -144,7 +144,12 @@ class ProfileLibrary:
         """Write every mic and the selection to the store."""
         self._store.save(self._profiles, self._selected)
 
-    def _find(self, slug: str | None) -> MicProfile | None:
+    def find(self, slug: str | None) -> MicProfile | None:
+        """Look up a mic that may not exist.
+
+        @param slug: the mic's slug.
+        @return: the mic, or None if there is no such mic.
+        """
         return next((profile for profile in self._profiles if profile.slug == slug), None)
 
     def _unused_name(self, name: str, ignoring: str | None = None) -> str:
@@ -162,6 +167,6 @@ class ProfileLibrary:
         slug = MicProfile(cleaned).slug
         if not slug:
             raise ProfileError("Include at least one letter or number in the name.")
-        if slug != ignoring and self._find(slug):
+        if slug != ignoring and self.find(slug):
             raise ProfileError(f"A mic called {cleaned} already exists.")
         return cleaned

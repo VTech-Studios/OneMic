@@ -32,6 +32,8 @@ class FakePipeWire:
         self.started_stages: list[tuple[str, str, str]] = []
         self.refuse_links_into: set[str] = set()
         self.refuse_mic = False
+        self.refuse_snapshots = False
+        self.refuse_volumes = False
         self.hidden_ports_for = 0
 
     def add_node(
@@ -52,7 +54,9 @@ class FakePipeWire:
         return node
 
     def remove_node(self, name: str) -> None:
-        node = self.node(name)
+        self._discard(self.node(name))
+
+    def _discard(self, node: Node) -> None:
         ports = {port.id for port in (*node.inputs, *node.outputs)}
         self.nodes.remove(node)
         self.links = {link for link in self.links if not {link.output_port, link.input_port} & ports}
@@ -71,6 +75,8 @@ class FakePipeWire:
         return any(link.output_port in outputs and link.input_port in inputs for link in self.links)
 
     def snapshot(self) -> Graph:
+        if self.refuse_snapshots:
+            raise AudioError("pw-dump did not answer")
         if self.hidden_ports_for:
             self.hidden_ports_for -= 1
             nodes = tuple(replace(node, inputs=(), outputs=()) for node in self.nodes)
@@ -103,6 +109,8 @@ class FakePipeWire:
         self.add_node(playback_name, "Stream/Output/Audio", outputs=2, process_id=pid)
 
     def set_volume(self, node_id: int, gain: float) -> None:
+        if self.refuse_volumes:
+            raise AudioError("wpctl: node not found")
         self.volume_calls += 1
         self.volumes[node_id] = gain
 
@@ -113,7 +121,7 @@ class FakePipeWire:
         assert program == "pw-loopback"
         self.terminated.append(pid)
         for node in [node for node in self.nodes if node.process_id == pid]:
-            self.remove_node(node.name)
+            self._discard(node)
 
     def spawn_detached(self, args: Sequence[str]) -> int:
         raise NotImplementedError

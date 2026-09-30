@@ -66,13 +66,27 @@ def test_failures_are_reported_and_the_worker_carries_on() -> None:
     worker.shutdown()
 
 
-def test_shutdown_drops_queued_jobs() -> None:
+def test_shutdown_finishes_queued_jobs_first() -> None:
     worker, recorder = LatestJobWorker(), Recorder()
     gate = threading.Event()
     worker.submit("block", gate.wait, lambda _: None, recorder.failed)
-    worker.submit("later", lambda: "never", recorder.done, recorder.failed)
+    worker.submit("later", lambda: "made", recorder.done, recorder.failed)
 
     gate.set()
     worker.shutdown()
 
-    assert "never" not in recorder.results
+    assert recorder.results == ["made"]
+
+
+def test_a_failing_callback_does_not_stop_the_worker() -> None:
+    worker, recorder = LatestJobWorker(), Recorder()
+
+    def broken(_: Any) -> None:
+        raise RuntimeError("callback bug")
+
+    worker.submit("a", lambda: 1, broken, recorder.failed)
+    worker.submit("b", lambda: 2, recorder.done, recorder.failed)
+
+    assert recorder.finished.wait(2)
+    assert recorder.results == [2]
+    worker.shutdown()

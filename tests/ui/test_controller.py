@@ -11,13 +11,15 @@ from onemic.domain.sources import AudioSource, SourceKind
 from onemic.domain.window import WindowState
 from onemic.services.library import ProfileLibrary
 from onemic.services.metering import Metering
-from onemic.services.session import MicSession, Timing
+from onemic.services.session import MicSession, SessionStatus
+from onemic.services.supervisor import NodeSupervisor, Timing
 from onemic.services.worker import LatestJobWorker
 from onemic.ui.controller import AppController
 from onemic.ui.dialogs import CloseChoice, MicActions
 from onemic.ui.dispatch import MainThreadDispatcher
 from onemic.ui.main_window import MainWindow
 from onemic.ui.meter_pump import MeterPump
+from onemic.ui.mic_actions import LIVE_DELETE, LibraryMicActions
 from onemic.ui.session_client import SessionClient
 from onemic.ui.theme import Palette
 from tests.fakes import FakePipeWire, FakeTaps, InMemoryProfileStore, InMemoryWindowStore
@@ -65,15 +67,10 @@ def harness(qtbot: QtBot) -> Iterator[Harness]:
     wire = FakePipeWire(default_sink="speakers")
     wire.add_node("speakers", "Audio/Sink", inputs=2, outputs=2)
     wire.add_node("mic2", "Audio/Source", outputs=1)
-    session = MicSession(
-        graph=wire,
-        mics=wire,
-        stages=wire,
-        volumes=wire,
-        launcher=wire,
-        timing=Timing(1, 0),
-        sleep=lambda _: None,
+    supervisor = NodeSupervisor(
+        graph=wire, mics=wire, stages=wire, launcher=wire, timing=Timing(1, 0), sleep=lambda _: None
     )
+    session = MicSession(graph=wire, supervisor=supervisor, volumes=wire)
     window = MainWindow(Palette(), LevelThresholds(), WindowState())
     qtbot.addWidget(window)
     client = SessionClient(session, wire, LatestJobWorker(), MainThreadDispatcher(window))
@@ -256,3 +253,45 @@ def test_failures_are_shown_in_the_window(qtbot: QtBot, harness: Harness) -> Non
     qtbot.waitUntil(lambda: harness.window._error.text() == "Module initialization failed")
     assert not harness.controller.status.live
     assert not harness.window.header._live.isChecked()
+
+
+def test_a_mic_still_going_live_cannot_be_deleted(harness: Harness) -> None:
+    harness.controller.start()
+
+    harness.window.header._live.click()
+    actions = LibraryMicActions(harness.controller._library, harness.controller._protected)
+
+    assert actions.delete_mic("lesson") == LIVE_DELETE
+
+
+def test_a_status_for_a_deleted_mic_stops_it(qtbot: QtBot, harness: Harness) -> None:
+    harness.controller.start()
+    harness.wire.create("onemic.ghost", "Ghost (OneMic)")
+
+    harness.controller._on_status(SessionStatus("ghost"))
+
+    qtbot.waitUntil(lambda: not harness.wire.has_node("onemic.ghost"))
+    assert not harness.controller.status.live
+
+
+def test_a_repair_that_started_before_a_click_does_not_undo_it(qtbot: QtBot, harness: Harness) -> None:
+    harness.controller.start()
+    go_live(qtbot, harness)
+    client = harness.controller._client
+    stale = client._generation
+
+    harness.window.header._live.click()
+    client._emit_if_current(stale, SessionStatus("lesson"))
+
+    qtbot.waitUntil(lambda: not harness.controller.status.live)
+    assert not harness.window.header._live.isChecked()
+
+
+def test_closing_right_after_going_live_still_asks(harness: Harness) -> None:
+    harness.controller.start()
+
+    harness.window.header._live.click()
+    harness.window.header.close_requested.emit()
+
+    assert harness.dialogs.close_asked == ["Lesson"]
+    assert harness.wire.has_node(NAMES.mic)

@@ -4,8 +4,9 @@ import logging
 import threading
 import time
 from collections import deque
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
+from typing import Protocol
 
 import numpy as np
 
@@ -89,14 +90,50 @@ class TapReader:
         self._thread = threading.Thread(target=self._run, name="onemic-tap", daemon=True)
         self._thread.start()
 
-    def close(self) -> None:
-        """Stop the tap and wait for its thread to finish."""
+    @property
+    def alive(self) -> bool:
+        return self._thread.is_alive()
+
+    def stop(self) -> None:
+        """Stop the tap, which wakes the thread with end of stream."""
         self._stream.close()
+
+    def join(self) -> None:
+        """Wait for the thread to finish after stop."""
         self._thread.join(timeout=2.0)
 
     def _run(self) -> None:
         while chunk := self._stream.read(BYTES_PER_COLUMN):
             self.meter.push(decode(chunk))
+
+
+def close_readers(readers: Iterable[TapReader]) -> None:
+    """Stop several taps, then wait for them together.
+
+    Stopping every tap before waiting on any means closing the window costs
+    one short wait rather than one per tap.
+
+    @param readers: the taps to close.
+    """
+    stopping = list(readers)
+    for reader in stopping:
+        reader.stop()
+    for reader in stopping:
+        reader.join()
+
+
+class MeterSource(Protocol):
+    def sync(self, wanted: Mapping[str, str]) -> None:
+        """Open missing taps and close unwanted ones."""
+        ...
+
+    def readings(self) -> dict[str, MeterReading]:
+        """Copy every meter's current state for drawing."""
+        ...
+
+    def close(self) -> None:
+        """Stop every tap."""
+        ...
 
 
 class Metering:
@@ -114,10 +151,17 @@ class Metering:
     def sync(self, wanted: Mapping[str, str]) -> None:
         """Open missing taps and close unwanted ones.
 
+        A tap whose recorder has exited, for example after PipeWire
+        restarted, counts as missing, so its waveform recovers on its own.
+
         @param wanted: tap node names, keyed by input id or the mix key.
         """
-        for key in [key for key, (name, _) in self._readers.items() if wanted.get(key) != name]:
-            self._readers.pop(key)[1].close()
+        stale = [
+            key
+            for key, (name, reader) in self._readers.items()
+            if wanted.get(key) != name or not reader.alive
+        ]
+        close_readers(self._readers.pop(key)[1] for key in stale)
         for key, name in wanted.items():
             if key not in self._readers:
                 self._open(key, name)

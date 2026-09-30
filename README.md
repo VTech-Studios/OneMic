@@ -255,7 +255,7 @@ The code follows a ports and adapters layout. Dependencies only point inwards:
 | --- | --- | --- |
 | Domain | `onemic/domain` | Plain data and rules: the graph snapshot, mics and inputs, node naming, levels, waveforms. No I/O. |
 | Ports | `onemic/ports.py` | Protocols for everything outside the process: commands, PipeWire, stores. |
-| Services | `onemic/services` | The session that builds and repairs a mic, the routing planner, metering, the mic library, and the background worker. |
+| Services | `onemic/services` | The session that keeps a mic wired and levelled, the supervisor that starts and stops its nodes, the routing planner, metering, the mic library, and the background worker. |
 | Adapters | `onemic/infrastructure` | The only code that runs PipeWire's tools or reads and writes files. |
 | Interface | `onemic/ui` | Qt widgets that show state and report intent, and the controller that connects them to the services. |
 | Composition root | `onemic/wiring.py` | The one place that picks concrete implementations. |
@@ -268,10 +268,15 @@ A few decisions worth knowing before changing things:
 - **All graph work runs on one background thread.** Reading the graph takes tens of milliseconds, which
   would stutter the waveforms. Jobs of the same kind replace each other while queued, so dragging a
   slider can never build up a backlog.
+- **Old answers are ignored.** Each click starts a new generation, and a routine repair that was already
+  running when you clicked cannot report back over it and flip the controls to a state you just left.
+- **Failures undo themselves.** A mic that fails part-way through going live is removed again, and a
+  failed listen change keeps the old setting, so the controls always match what is really running.
 - **OneMic only ever stops `pw-loopback`.** Process ids come from the graph, and every one is checked
   against `/proc` before it is signalled.
 - **A call app recording the mic is never unlinked.** Routing only manages links into OneMic's own nodes,
-  out of its gain stages, and from the mic to speakers.
+  out of its gain stages, and from the mic to the outputs OneMic itself played it through for Listen.
+  A link you make by hand from the mic to anything else is left alone.
 
 ## Licence
 

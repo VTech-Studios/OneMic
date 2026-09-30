@@ -15,6 +15,7 @@ from .infrastructure.volume import WpctlVolume
 from .services.library import ProfileLibrary
 from .services.metering import Metering
 from .services.session import MicSession
+from .services.supervisor import NodeSupervisor
 from .services.worker import LatestJobWorker
 from .ui.controller import AppController
 from .ui.dialogs import QtDialogs
@@ -31,21 +32,21 @@ class Application:
     controller: AppController
 
 
-def build_session(runner: SubprocessRunner, launcher: SubprocessLauncher) -> MicSession:
+def build_session(graph: PipeWireGraph, runner: SubprocessRunner, launcher: SubprocessLauncher) -> MicSession:
     """Wire the session to the real PipeWire tools.
 
+    @param graph: reads and rewires the audio graph.
     @param runner: runs short commands.
     @param launcher: starts long-running helpers.
     @return: a session with no mic live yet.
     """
-    graph = PipeWireGraph(runner)
-    return MicSession(
+    supervisor = NodeSupervisor(
         graph=graph,
         mics=PactlVirtualMic(runner),
         stages=PwLoopbackStages(launcher),
-        volumes=WpctlVolume(runner),
         launcher=launcher,
     )
+    return MicSession(graph=graph, supervisor=supervisor, volumes=WpctlVolume(runner))
 
 
 def build_application(config: Config, quit_application: Callable[[], None]) -> Application:
@@ -60,14 +61,12 @@ def build_application(config: Config, quit_application: Callable[[], None]) -> A
     @return: the window and its controller, not yet shown.
     """
     runner, launcher = SubprocessRunner(), SubprocessLauncher()
+    graph = PipeWireGraph(runner)
     palette, thresholds = Palette(), LevelThresholds()
     window_store = JsonWindowStateStore(config.window_path)
     window = MainWindow(palette, thresholds, window_store.load())
     client = SessionClient(
-        build_session(runner, launcher),
-        PipeWireGraph(runner),
-        LatestJobWorker(),
-        MainThreadDispatcher(window),
+        build_session(graph, runner, launcher), graph, LatestJobWorker(), MainThreadDispatcher(window)
     )
     meters = MeterPump(Metering(PwRecordTaps(launcher)), window.show_levels, window)
     controller = AppController(

@@ -5,7 +5,8 @@ from onemic.domain.graph import Graph
 from onemic.domain.naming import NodeNames
 from onemic.domain.profile import InputSettings, MicProfile
 from onemic.services.routing import InputState
-from onemic.services.session import MicSession, Timing
+from onemic.services.session import MicSession
+from onemic.services.supervisor import NodeSupervisor, Timing
 from tests.fakes import FakePipeWire
 
 VOICE = InputSettings("v1", "mic2", "Voice", gain=0.8)
@@ -23,16 +24,18 @@ def wire() -> FakePipeWire:
     return pipewire
 
 
-def session_for(wire: FakePipeWire) -> MicSession:
-    return MicSession(
+def session_for(wire: FakePipeWire, clock: list[float] | None = None) -> MicSession:
+    now = clock if clock is not None else [0.0]
+    supervisor = NodeSupervisor(
         graph=wire,
         mics=wire,
         stages=wire,
-        volumes=wire,
         launcher=wire,
-        timing=Timing(attempts=3, interval=0),
+        timing=Timing(attempts=3, interval=0, grace=5.0),
         sleep=lambda _: None,
+        clock=lambda: now[0],
     )
+    return MicSession(graph=wire, supervisor=supervisor, volumes=wire)
 
 
 def test_going_live_builds_and_wires_the_mic(wire: FakePipeWire) -> None:
@@ -104,12 +107,17 @@ def test_an_application_opened_later_is_linked_on_the_next_pass(wire: FakePipeWi
     assert wire.linked("REAPER", NAMES.stage_input("g1"))
 
 
-def test_a_crashed_stage_is_restarted(wire: FakePipeWire) -> None:
-    session = session_for(wire)
+def test_a_crashed_stage_is_restarted_once_its_grace_period_is_over(wire: FakePipeWire) -> None:
+    clock = [0.0]
+    session = session_for(wire, clock)
     session.go_live(LESSON)
     pid = wire.node(NAMES.stage_output("v1")).process_id
     wire.remove_node(NAMES.stage_output("v1"))
 
+    session.reconcile()
+    assert pid not in wire.terminated
+
+    clock[0] = 10.0
     session.reconcile()
 
     assert pid in wire.terminated
@@ -216,3 +224,73 @@ def test_graph_failures_reach_the_caller() -> None:
 
     with pytest.raises(AudioError):
         session_for(Broken()).go_live(LESSON)
+
+
+def test_a_failed_go_live_leaves_nothing_behind(wire: FakePipeWire) -> None:
+    session = session_for(wire)
+    session.go_live(MicProfile("Stream", (VOICE,)))
+    wire.refuse_mic = True
+
+    with pytest.raises(AudioError):
+        session.go_live(LESSON)
+
+    assert not session.status().live
+    assert not [node.name for node in wire.nodes if node.name.startswith("onemic")]
+
+
+def test_a_failed_listen_change_keeps_the_old_setting(wire: FakePipeWire) -> None:
+    session = session_for(wire)
+    session.go_live(LESSON)
+    wire.refuse_snapshots = True
+
+    with pytest.raises(AudioError):
+        session.set_listening(True)
+
+    assert not session.status().listening
+
+
+def test_changing_the_default_output_moves_listening(wire: FakePipeWire) -> None:
+    session = session_for(wire)
+    session.go_live(LESSON)
+    session.set_listening(True)
+    wire.add_node("headphones", "Audio/Sink", inputs=2)
+    wire.default_sink = "headphones"
+
+    session.reconcile()
+
+    assert wire.linked(NAMES.mic, "headphones")
+    assert not wire.linked(NAMES.mic, "speakers")
+
+
+def test_level_changes_reach_a_restarted_stage(wire: FakePipeWire) -> None:
+    clock = [0.0]
+    session = session_for(wire, clock)
+    session.go_live(LESSON)
+    wire.remove_node(NAMES.stage_output("v1"))
+    clock[0] = 10.0
+    session.reconcile()
+
+    session.apply_levels(LESSON.with_input_gain("v1", 0.2))
+
+    assert wire.volumes[wire.node(NAMES.stage_output("v1")).id] == 0.2
+
+
+def test_a_level_change_that_fails_is_retried_on_the_next_pass(wire: FakePipeWire) -> None:
+    session = session_for(wire)
+    wire.refuse_volumes = True
+    session.go_live(LESSON)
+    wire.refuse_volumes = False
+
+    session.reconcile()
+
+    assert wire.volumes[wire.node(NAMES.stage_output("v1")).id] == 0.8
+
+
+def test_adopting_removes_any_other_mic_left_live(wire: FakePipeWire) -> None:
+    session_for(wire).go_live(LESSON)
+    wire.create("onemic.stream", "Stream (OneMic)")
+
+    session_for(wire).adopt([LESSON, MicProfile("Stream")])
+
+    assert not wire.has_node("onemic.stream")
+    assert wire.has_node(NAMES.mic)

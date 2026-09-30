@@ -87,6 +87,10 @@ class PipeStream:
 class SubprocessLauncher:
     """Starts long-running PipeWire helpers."""
 
+    def __init__(self, proc: Path = Path("/proc")) -> None:
+        self._children: dict[int, subprocess.Popen[bytes]] = {}
+        self._proc = proc
+
     def spawn_detached(self, args: Sequence[str]) -> int:
         """Start a helper in its own session.
 
@@ -97,6 +101,7 @@ class SubprocessLauncher:
         @return: the new process id.
         @raise AudioError: if the program cannot be started.
         """
+        self._reap_exited()
         process = self._popen(args, subprocess.DEVNULL, detached=True)
         self._children[process.pid] = process
         return process.pid
@@ -112,10 +117,6 @@ class SubprocessLauncher:
         if process.stdout is None:
             raise AudioError(f"{args[0]} started without an output pipe")
         return PipeStream(process, process.stdout)
-
-    def __init__(self, proc: Path = Path("/proc")) -> None:
-        self._children: dict[int, subprocess.Popen[bytes]] = {}
-        self._proc = proc
 
     def terminate(self, pid: int, program: str) -> None:
         """Ask a process to stop, but only if it is the expected program.
@@ -135,6 +136,16 @@ class SubprocessLauncher:
         child = self._children.pop(pid, None)
         if child is not None:
             reap(child)
+
+    def _reap_exited(self) -> None:
+        """Collect helpers that exited on their own.
+
+        A gain stage that crashes stays a zombie until its exit status is
+        read. Checking before each start keeps them from piling up.
+        """
+        for pid, child in list(self._children.items()):
+            if child.poll() is not None:
+                del self._children[pid]
 
     def _program(self, pid: int) -> str | None:
         try:

@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 from enum import Enum
 
 from ..domain.graph import Graph, Link, Node, pair_channels
 from ..domain.naming import NodeNames
 from ..domain.profile import InputSettings, MicProfile
-
-SINK_CLASS = "Audio/Sink"
 
 
 class InputState(Enum):
@@ -34,10 +32,21 @@ class Routing:
 
     @property
     def to_create(self) -> frozenset[Link]:
+        """Desired links that do not exist yet.
+
+        Every desired link touches a node the mic manages, so one that
+        already exists is always among the managed links.
+
+        @return: the links to make.
+        """
         return self.desired - self.managed
 
     @property
     def to_remove(self) -> frozenset[Link]:
+        """Managed links that are no longer wanted.
+
+        @return: the links to break.
+        """
         return self.managed - self.desired
 
 
@@ -97,15 +106,17 @@ def _listen_links(graph: Graph, mic: Node | None) -> frozenset[Link]:
     return _join(mic, sink)
 
 
-def managed_links(graph: Graph, names: NodeNames) -> frozenset[Link]:
+def managed_links(graph: Graph, names: NodeNames, heard: Collection[str]) -> frozenset[Link]:
     """Collect the existing links this mic is responsible for.
 
     That is everything into the mic's own nodes, everything out of its gain
-    stages, and the mic's listening links to speakers. A call application
-    recording from the mic is deliberately left out, so it is never cut off.
+    stages, and the mic's links to the outputs OneMic itself played it
+    through. A call application recording the mic, or a link the user made
+    by hand from the mic to any other output, is left alone.
 
     @param graph: the current snapshot.
     @param names: the node names of the mic.
+    @param heard: names of the outputs OneMic has linked the mic to for listening.
     @return: the links a routing pass may keep or remove.
     """
     owned = [node for node in graph.nodes if names.owns(node.name)]
@@ -113,7 +124,7 @@ def managed_links(graph: Graph, names: NodeNames) -> frozenset[Link]:
     outputs = {port.id for node in owned if node.name != names.mic for port in node.outputs}
     mic = graph.node(names.mic)
     mic_outputs = {port.id for port in mic.outputs} if mic else set()
-    speakers = {port.id for node in graph.nodes if node.media_class == SINK_CLASS for port in node.inputs}
+    speakers = {port.id for node in graph.nodes if node.name in heard for port in node.inputs}
     return frozenset(
         link
         for link in graph.links
@@ -123,12 +134,14 @@ def managed_links(graph: Graph, names: NodeNames) -> frozenset[Link]:
     )
 
 
-def route(profile: MicProfile, graph: Graph, listening: bool) -> Routing:
+def route(profile: MicProfile, graph: Graph, listening: bool, heard: Collection[str] = ()) -> Routing:
     """Work out the complete wiring for a live mic.
 
     @param profile: the live mic.
     @param graph: the current snapshot.
     @param listening: True to also play the mic through the default output.
+    @param heard: names of the outputs OneMic has linked the mic to for listening,
+        so those links can be removed when listening stops or the default output changes.
     @return: the desired and existing links, and each input's state.
     """
     names = NodeNames(profile.slug)
@@ -141,7 +154,7 @@ def route(profile: MicProfile, graph: Graph, listening: bool) -> Routing:
         desired |= _listen_links(graph, mic)
     return Routing(
         desired=desired,
-        managed=managed_links(graph, names),
+        managed=managed_links(graph, names, heard),
         inputs={settings.id: input_state(settings, graph, names) for settings in profile.inputs},
         listen_blocked=blocked,
     )

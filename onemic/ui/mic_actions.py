@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Collection, Sequence
 
 from ..domain.errors import ProfileError
 from ..domain.profile import MicProfile
@@ -17,9 +17,9 @@ class LibraryMicActions:
     every PipeWire node it owns, and changing it would drop the call.
     """
 
-    def __init__(self, library: ProfileLibrary, live_slug: Callable[[], str | None]) -> None:
+    def __init__(self, library: ProfileLibrary, protected: Callable[[], Collection[str]]) -> None:
         self._library = library
-        self._live_slug = live_slug
+        self._protected = protected
 
     def list_mics(self) -> Sequence[MicProfile]:
         """List every saved mic, in display order.
@@ -52,7 +52,7 @@ class LibraryMicActions:
         @param name: the new name as typed.
         @return: an error message, or None on success.
         """
-        if slug == self._live_slug():
+        if slug in self._protected():
             return LIVE_RENAME
         return self._attempt(lambda: self._library.rename(slug, name))
 
@@ -62,7 +62,7 @@ class LibraryMicActions:
         @param slug: the mic to delete.
         @return: an error message, or None on success.
         """
-        if slug == self._live_slug():
+        if slug in self._protected():
             return LIVE_DELETE
         return self._attempt(lambda: self._library.delete(slug))
 

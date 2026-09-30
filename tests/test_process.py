@@ -74,3 +74,14 @@ def test_terminate_ignores_a_process_that_has_gone(tmp_path: Path, caplog: pytes
 def test_starting_a_missing_program_is_an_audio_error() -> None:
     with pytest.raises(AudioError, match="could not be started"):
         SubprocessLauncher().spawn_detached(["onemic-no-such-program"])
+
+
+def test_helpers_that_exit_on_their_own_are_reaped() -> None:
+    launcher = SubprocessLauncher()
+    first = launcher.spawn_detached(["true"])
+    import time
+
+    time.sleep(0.2)
+    launcher.spawn_detached(["true"])
+
+    assert first not in launcher._children

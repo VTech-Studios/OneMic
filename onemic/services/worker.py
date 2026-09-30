@@ -5,13 +5,33 @@ import threading
 from collections import OrderedDict
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Protocol
 
 log = logging.getLogger(__name__)
 
 Job = Callable[[], Any]
 Done = Callable[[Any], None]
 Failed = Callable[[Exception], None]
+
+
+class JobQueue(Protocol):
+    def submit(self, key: str, job: Job, done: Done, failed: Failed) -> None:
+        """Queue a job, replacing any queued job with the same key.
+
+        @param key: what the job does, such as "levels" or "reconcile".
+        @param job: the work, run in the background.
+        @param done: called in the background with the job's result.
+        @param failed: called in the background with the job's exception.
+        """
+        ...
+
+    def is_pending(self, key: str) -> bool:
+        """Tell whether a job with this key is queued and not yet started."""
+        ...
+
+    def shutdown(self) -> None:
+        """Finish every queued job, then stop."""
+        ...
 
 
 @dataclass(frozen=True)
@@ -60,23 +80,39 @@ class LatestJobWorker:
             return key in self._pending
 
     def shutdown(self) -> None:
-        """Finish the job in progress, drop the rest, and stop the thread."""
+        """Finish every queued job, then stop the thread.
+
+        Queued jobs are run rather than dropped, so a mic the user asked for
+        just before closing is really made before the close prompt's choice
+        is applied. Every command has its own timeout, so this cannot hang.
+        """
         with self._condition:
             self._running = False
-            self._pending.clear()
             self._condition.notify()
-        self._thread.join(timeout=10.0)
+        self._thread.join()
 
     def _next(self) -> _Task | None:
         with self._condition:
             while self._running and not self._pending:
                 self._condition.wait()
-            if not self._running:
+            if not self._pending:
                 return None
             return self._pending.popitem(last=False)[1]
 
     def _loop(self) -> None:
         while (task := self._next()) is not None:
+            self._run(task)
+
+    @staticmethod
+    def _run(task: _Task) -> None:
+        """Run one job and report its outcome, whatever goes wrong.
+
+        Nothing may escape, including an exception from a callback, or the
+        thread would die and every later job would silently never run.
+
+        @param task: the job and its callbacks.
+        """
+        try:
             try:
                 result = task.job()
             except Exception as error:
@@ -84,3 +120,5 @@ class LatestJobWorker:
                 task.failed(error)
             else:
                 task.done(result)
+        except Exception:
+            log.exception("A background job's callback failed")

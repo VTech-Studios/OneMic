@@ -60,6 +60,17 @@ class Graph:
         """
         return next((node for node in self.nodes if node.name == name), None)
 
+    def nodes_named(self, name: str) -> tuple[Node, ...]:
+        """Find every node with a name, oldest first.
+
+        Names are meant to be unique, but a helper started twice leaves two
+        nodes with one name, and those duplicates have to be found to be removed.
+
+        @param name: the node.name property.
+        @return: the matching nodes, ordered by serial.
+        """
+        return tuple(sorted((node for node in self.nodes if node.name == name), key=lambda node: node.serial))
+
     def links_touching(self, nodes: Iterable[Node]) -> frozenset[Link]:
         """Collect every link into or out of the given nodes.
 

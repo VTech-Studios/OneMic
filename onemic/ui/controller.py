@@ -49,6 +49,7 @@ class AppController(QObject):
         self._dialogs = dialogs
         self._quit = quit_application
         self._status = SessionStatus()
+        self._requested: str | None = None
         self._reconcile_timer = QTimer(self, interval=RECONCILE_MS)
         self._save_timer = QTimer(self, singleShot=True, interval=SAVE_DELAY_MS)
         self._connect()
@@ -102,7 +103,19 @@ class AppController(QObject):
         )
 
     def _on_status(self, status: SessionStatus) -> None:
+        """Show the session's state, which is always the answer to the latest request.
+
+        Older answers never arrive here, so the mic that was asked to go
+        live can be taken from the status itself. A live mic that has since
+        been deleted is stopped rather than shown.
+
+        @param status: the session's status.
+        """
+        if status.live_slug and self._library.find(status.live_slug) is None:
+            self._client.stop()
+            return
         self._status = status
+        self._requested = status.live_slug
         if status.live_slug and status.live_slug != self._library.selected.slug:
             self._library.select(status.live_slug)
             self._show_library()
@@ -127,16 +140,31 @@ class AppController(QObject):
 
     def _on_live_toggled(self, live: bool) -> None:
         if live:
-            self._client.go_live(self._library.selected)
+            self._go_live(self._library.selected)
         else:
+            self._requested = None
             self._client.stop()
 
     def _on_mic_selected(self, slug: str) -> None:
         profile = self._library.select(slug)
         self._window.show_profile(profile)
         self._save_timer.start()
-        if self._status.live:
-            self._client.go_live(profile)
+        if self._requested:
+            self._go_live(profile)
+
+    def _go_live(self, profile: MicProfile) -> None:
+        self._requested = profile.slug
+        self._client.go_live(profile)
+
+    def _protected(self) -> set[str]:
+        """Name the mics that must not be renamed or deleted.
+
+        That is the live mic and any mic still on its way to going live,
+        because the status reporting it may not have arrived yet.
+
+        @return: the protected slugs.
+        """
+        return {slug for slug in (self._requested, self._status.live_slug) if slug}
 
     def _edit_levels(self, change: Callable[[MicProfile], MicProfile]) -> None:
         profile = self._library.update(change(self._library.selected))
@@ -161,9 +189,9 @@ class AppController(QObject):
             self._edit_inputs(lambda profile: profile.with_input(self._library.new_input(chosen)))
 
     def _on_manage(self) -> None:
-        self._dialogs.manage_mics(LibraryMicActions(self._library, lambda: self._status.live_slug))
-        if self._status.live_slug:
-            self._library.select(self._status.live_slug)
+        self._dialogs.manage_mics(LibraryMicActions(self._library, self._protected))
+        if self._requested:
+            self._library.select(self._requested)
         self._show_library()
         self._save_timer.start()
 
@@ -173,7 +201,7 @@ class AppController(QObject):
 
     def _on_close(self) -> None:
         choice = CloseChoice.KEEP_LIVE
-        if self._status.live:
+        if self._requested or self._status.live:
             choice = self._dialogs.ask_on_close(self._library.selected.name)
         if choice is CloseChoice.CANCEL:
             return

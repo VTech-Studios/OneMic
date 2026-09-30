@@ -41,10 +41,10 @@ def test_reader_feeds_the_meter_until_the_stream_ends() -> None:
     stream = FakeStream([chunk((0.5, 0.5)) * (BYTES_PER_COLUMN // 8)] * 3)
 
     reader = TapReader(stream, meter)
-    reader.close()
+    reader.join()
 
-    assert len(meter.reading().columns) <= 3
-    assert stream.closed
+    assert len(meter.reading().columns) == 3
+    assert not reader.alive
 
 
 def test_sync_opens_wanted_taps_and_closes_unwanted_ones() -> None:
@@ -71,6 +71,20 @@ def test_a_renamed_tap_is_reopened() -> None:
 
     assert taps.opened["onemic.a.tap.mix"].closed
     assert "onemic.b.tap.mix" in taps.opened
+    metering.close()
+
+
+def test_a_tap_whose_recorder_exited_is_reopened() -> None:
+    taps = FakeTaps()
+    metering = Metering(taps)
+    metering.sync({"mix": "tap.mix"})
+    first = taps.opened["tap.mix"]
+    first.close()
+    metering._readers["mix"][1].join()
+
+    metering.sync({"mix": "tap.mix"})
+
+    assert taps.opened["tap.mix"] is not first
     metering.close()
 
 
