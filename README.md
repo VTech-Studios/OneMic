@@ -96,7 +96,21 @@ If you use a DAW through JACK, install `pipewire-jack` as well so it appears in 
 
 ## Installation
 
-Clone the repository and install it with `pipx`:
+### From a release
+
+Download the wheel (`onemic-<version>-py3-none-any.whl`) from the
+[releases page](https://github.com/LukeMcCann/onemic/releases), then:
+
+```bash
+pipx install --system-site-packages onemic-1.0.0-py3-none-any.whl
+```
+
+`--system-site-packages` reuses the distribution's PySide6 and NumPy, which are large and already
+installed. To upgrade later, install the newer wheel with `pipx install --force`.
+
+### From source
+
+Clone the repository and install it in editable mode:
 
 ```bash
 git clone https://github.com/LukeMcCann/onemic.git
@@ -104,9 +118,32 @@ cd onemic
 pipx install --system-site-packages --editable .
 ```
 
-`--system-site-packages` reuses the distribution's PySide6 and NumPy, which are large and already
-installed. `--editable` makes the installed command run the cloned folder, so pulling changes updates
-it without reinstalling.
+`--editable` makes the installed command run the cloned folder, so pulling changes updates it without
+reinstalling. This is the one to use while working on OneMic itself.
+
+### Building your own copy
+
+To turn the source into the same files a release ships, install the build tool and run it from the
+repository:
+
+```bash
+python -m venv --system-site-packages .venv
+.venv/bin/pip install build
+.venv/bin/python -m build
+```
+
+This creates two files in `dist/`:
+
+| File | What it is |
+| --- | --- |
+| `onemic-1.0.0-py3-none-any.whl` | The wheel: a ready-to-install package. Install it with `pipx` as above. |
+| `onemic-1.0.0.tar.gz` | The source distribution: the source code as released, for packagers. |
+
+A wheel built from a checkout of a release tag is identical to the one on the releases page, so this is
+also how to get a specific version without downloading anything. To switch an editable install over to
+your built wheel, run `pipx install --force --system-site-packages dist/onemic-1.0.0-py3-none-any.whl`.
+
+### Making `onemic` a command
 
 `pipx` puts an `onemic` launcher in `~/.local/bin`. If `command -v onemic` finds nothing, run
 `pipx ensurepath` and open a new terminal.
@@ -285,6 +322,46 @@ The tests never touch the real audio graph. Session tests run against `FakePipeW
 `tests/fakes.py`, an in-memory graph that creates nodes and ports, removes them when their process
 stops, and records links, so they read like real use. Interface tests use `pytest-qt` with Qt's
 offscreen platform, which is also what CI uses.
+
+### Continuous integration
+
+Two GitHub Actions workflows live in `.github/workflows`:
+
+- `ci.yml` runs the lint, type and test checks on every push to `master` and on every pull request.
+- `release.yml` runs when a version tag is pushed. It runs the same checks, confirms the tag matches the
+  package version, builds the wheel and source distribution, and publishes a GitHub release with that
+  version's notes from `CHANGELOG.md` and both files attached.
+
+### Releasing
+
+A release is a git tag plus a GitHub release page with downloadable files. The release workflow does the
+building and publishing, so a release only needs the version, the changelog and a tag.
+
+1. Choose the new version using [Semantic Versioning](https://semver.org/): bump the patch number
+   (`1.0.1`) for fixes, the minor number (`1.1.0`) for new features, and the major number (`2.0.0`) for
+   changes that break how people use it, such as a settings file an older version cannot read.
+2. Set `__version__` in `onemic/__init__.py`. It is the only place the version is written, and
+   `pyproject.toml` reads it from there.
+3. In `CHANGELOG.md`, move the entries under `[Unreleased]` into a new `## [x.y.z] - YYYY-MM-DD` section
+   and update the links at the bottom.
+4. Check the release is consistent, build it locally to be sure it builds, then commit:
+
+   ```bash
+   .venv/bin/python scripts/release_notes.py --check-tag vX.Y.Z
+   .venv/bin/python scripts/release_notes.py vX.Y.Z
+   .venv/bin/python -m build
+   git commit -am "Release X.Y.Z"
+   ```
+
+5. Tag the commit and push both:
+
+   ```bash
+   git tag -a vX.Y.Z -m "OneMic X.Y.Z"
+   git push origin master vX.Y.Z
+   ```
+
+The workflow then publishes the release. If the tag and version disagree, or the changelog has no
+section for the version, it stops before anything is published.
 
 ### Architecture
 

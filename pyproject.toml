@@ -67,7 +67,7 @@ ignore = [
 [tool.mypy]
 strict = true
 python_version = "3.12"
-files = ["onemic", "tests"]
+files = ["onemic", "tests", "scripts"]
 
 [[tool.mypy.overrides]]
 module = ["PySide6.*", "shiboken6.*"]

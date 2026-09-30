@@ -32,8 +32,8 @@ jobs:
 
       - name: Lint
         run: |
-          ruff check onemic tests
-          ruff format --check onemic tests
+          ruff check onemic tests scripts
+          ruff format --check onemic tests scripts
 
       - name: Type check
         run: mypy
