@@ -87,7 +87,7 @@ def test_status_marks_each_row_and_the_window(window: MainWindow) -> None:
     window.show_status(SessionStatus())
 
     assert not window._live
-    assert window._rows["i0"].toolTip() == "Not live"
+    assert window._rows["i0"].toolTip().startswith("Not live")
 
 
 def test_levels_reach_visible_rows_and_the_mix(window: MainWindow) -> None:

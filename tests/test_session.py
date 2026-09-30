@@ -294,3 +294,33 @@ def test_adopting_removes_any_other_mic_left_live(wire: FakePipeWire) -> None:
 
     assert not wire.has_node("onemic.stream")
     assert wire.has_node(NAMES.mic)
+
+
+def test_preview_links_sources_to_taps_while_nothing_is_live(wire: FakePipeWire) -> None:
+    wire.add_node(NAMES.tap("v1"), "Stream/Input/Audio", inputs=2)
+
+    status = session_for(wire).preview(LESSON)
+
+    assert not status.live
+    assert wire.linked("mic2", NAMES.tap("v1"))
+    assert not wire.has_node(NAMES.mic)
+
+
+def test_going_live_moves_a_tap_from_the_source_to_its_stage(wire: FakePipeWire) -> None:
+    wire.add_node(NAMES.tap("v1"), "Stream/Input/Audio", inputs=2)
+    session = session_for(wire)
+    session.preview(LESSON)
+
+    session.go_live(LESSON)
+
+    assert wire.linked(NAMES.stage_output("v1"), NAMES.tap("v1"))
+    assert not wire.linked("mic2", NAMES.tap("v1"))
+
+
+def test_preview_changes_nothing_while_live(wire: FakePipeWire) -> None:
+    session = session_for(wire)
+    session.go_live(LESSON)
+    links = set(wire.links)
+
+    assert session.preview(LESSON).live
+    assert wire.links == links

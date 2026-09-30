@@ -10,21 +10,22 @@ from ..services.metering import MeterReading, MeterSource
 FRAME_MS = 33
 
 
-def wanted_taps(slug: str | None, input_ids: Sequence[str]) -> dict[str, str]:
+def wanted_taps(slug: str, input_ids: Sequence[str], live: bool) -> dict[str, str]:
     """Decide which signals to meter.
 
-    Only rows on screen are metered, plus the mix, so a mic with eight
-    inputs shown compactly runs three taps rather than nine.
+    Only rows on screen are metered, so a mic with eight inputs shown
+    compactly runs three taps rather than nine. The mix only exists while
+    the mic is live, so it is only metered then.
 
-    @param slug: the live mic's slug, or None when nothing is live.
+    @param slug: the slug of the mic on screen.
     @param input_ids: the inputs whose rows are visible.
-    @return: tap node names keyed by input id or the mix key; empty when not live.
+    @param live: True while that mic is live.
+    @return: tap node names keyed by input id or the mix key.
     """
-    if slug is None:
-        return {}
     names = NodeNames(slug)
     taps = {input_id: names.tap(input_id) for input_id in input_ids}
-    taps[MIX_TAP] = names.mix_tap
+    if live:
+        taps[MIX_TAP] = names.mix_tap
     return taps
 
 
@@ -43,13 +44,14 @@ class MeterPump(QObject):
         self._timer = QTimer(self, interval=FRAME_MS)
         self._timer.timeout.connect(lambda: self._draw(self._metering.readings()))
 
-    def follow(self, slug: str | None, input_ids: Sequence[str]) -> None:
-        """Meter the given rows of the live mic, or nothing if none is live.
+    def follow(self, slug: str, input_ids: Sequence[str], live: bool) -> None:
+        """Meter the visible rows of the mic on screen.
 
-        @param slug: the live mic's slug, or None.
+        @param slug: the slug of the mic on screen.
         @param input_ids: the inputs whose rows are visible.
+        @param live: True while that mic is live, which adds the mix.
         """
-        taps = wanted_taps(slug, input_ids)
+        taps = wanted_taps(slug, input_ids, live)
         self._metering.sync(taps)
         if taps:
             self._timer.start()

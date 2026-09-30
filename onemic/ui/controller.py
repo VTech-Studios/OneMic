@@ -64,6 +64,7 @@ class AppController(QObject):
         self._window.place()
         self._window.show()
         self._client.adopt(self._library.profiles)
+        self._reconcile_timer.start()
 
     def _connect(self) -> None:
         self._connect_header()
@@ -72,7 +73,7 @@ class AppController(QObject):
         self._client.failed.connect(self._on_failure)
         self._client.sources_ready.connect(self._on_sources)
         self._window.state_changed.connect(self._on_window_state)
-        self._reconcile_timer.timeout.connect(self._client.reconcile)
+        self._reconcile_timer.timeout.connect(self._tick)
         self._save_timer.timeout.connect(self._library.save)
 
     def _connect_header(self) -> None:
@@ -121,10 +122,6 @@ class AppController(QObject):
             self._show_library()
         self._window.show_status(status)
         self._follow_meters()
-        if status.live:
-            self._reconcile_timer.start()
-        else:
-            self._reconcile_timer.stop()
 
     def _on_failure(self, message: str) -> None:
         """Show what went wrong and put the controls back to the real state.
@@ -148,6 +145,7 @@ class AppController(QObject):
     def _on_mic_selected(self, slug: str) -> None:
         profile = self._library.select(slug)
         self._window.show_profile(profile)
+        self._follow_meters()
         self._save_timer.start()
         if self._requested:
             self._go_live(profile)
@@ -193,6 +191,7 @@ class AppController(QObject):
         if self._requested:
             self._library.select(self._requested)
         self._show_library()
+        self._follow_meters()
         self._save_timer.start()
 
     def _on_window_state(self, state: WindowState) -> None:
@@ -213,8 +212,16 @@ class AppController(QObject):
         self._window.close()
         self._quit()
 
+    def _tick(self) -> None:
+        """Repair the live mic each second, or keep the preview meters fed while nothing is live."""
+        if self._status.live:
+            self._client.reconcile()
+        else:
+            self._client.preview(self._library.selected)
+
     def _follow_meters(self) -> None:
-        self._meters.follow(self._status.live_slug, self._window.visible_inputs())
+        selected = self._library.selected
+        self._meters.follow(selected.slug, self._window.visible_inputs(), self._status.live)
 
     def _show_library(self) -> None:
         selected = self._library.selected

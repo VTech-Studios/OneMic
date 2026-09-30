@@ -88,6 +88,16 @@ class SessionClient(QObject):
         if not self._worker.is_pending("reconcile"):
             self._submit("reconcile", self._session.reconcile, self._generation)
 
+    def preview(self, profile: MicProfile) -> None:
+        """Feed input meters straight from their sources while nothing is live.
+
+        Shares the repair job's key, so the two never queue up behind each other.
+
+        @param profile: the mic being set up.
+        """
+        if not self._worker.is_pending("reconcile"):
+            self._submit("reconcile", lambda: self._session.preview(profile), self._generation)
+
     def list_sources(self) -> None:
         """Read the graph for the add-input picker."""
         self._worker.submit(

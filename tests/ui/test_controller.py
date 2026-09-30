@@ -124,7 +124,7 @@ def test_going_live_builds_the_mic_and_starts_meters(qtbot: QtBot, harness: Harn
     assert set(harness.taps.opened) == {NAMES.tap("v1"), NAMES.mix_tap}
 
 
-def test_stopping_takes_the_mic_down_and_closes_meters(qtbot: QtBot, harness: Harness) -> None:
+def test_stopping_takes_the_mic_down_and_keeps_only_input_meters(qtbot: QtBot, harness: Harness) -> None:
     harness.controller.start()
     go_live(qtbot, harness)
 
@@ -132,7 +132,8 @@ def test_stopping_takes_the_mic_down_and_closes_meters(qtbot: QtBot, harness: Ha
 
     qtbot.waitUntil(lambda: not harness.controller.status.live)
     assert not harness.wire.has_node(NAMES.mic)
-    assert all(stream.closed for stream in harness.taps.opened.values())
+    assert harness.taps.opened[NAMES.mix_tap].closed
+    assert not harness.taps.opened[NAMES.tap("v1")].closed
 
 
 def test_slider_changes_reach_pipewire_and_are_saved_once(qtbot: QtBot, harness: Harness) -> None:
@@ -295,3 +296,14 @@ def test_closing_right_after_going_live_still_asks(harness: Harness) -> None:
 
     assert harness.dialogs.close_asked == ["Lesson"]
     assert harness.wire.has_node(NAMES.mic)
+
+
+def test_inputs_are_metered_before_going_live(qtbot: QtBot, harness: Harness) -> None:
+    harness.controller.start()
+
+    qtbot.waitUntil(lambda: NAMES.tap("v1") in harness.taps.opened)
+    assert NAMES.mix_tap not in harness.taps.opened
+
+    go_live(qtbot, harness)
+
+    assert NAMES.mix_tap in harness.taps.opened

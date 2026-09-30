@@ -12,7 +12,7 @@ from .waveform import WaveformView
 from .widgets import tool_button
 
 STATE_HINTS = {
-    InputState.OFF: "Not live",
+    InputState.OFF: "Not live. The waveform shows the source itself, before this input's volume.",
     InputState.STARTING: "Starting",
     InputState.WAITING: "Waiting for this source to appear",
     InputState.LIVE: "Live",

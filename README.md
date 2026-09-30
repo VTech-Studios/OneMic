@@ -126,8 +126,12 @@ Without `pipx`, you can run it straight from the source folder with `python -m o
 1. Start OneMic. It opens in the bottom-right corner with an empty mic called **My Mic**.
 2. Click **Add input…**, pick a source, and repeat for each signal you want. Sources are grouped into
    microphones and inputs, applications, and speakers (what they are playing).
-3. Click **GO LIVE**. The button turns red and reads **● LIVE**, and the window gets a red border.
-4. In your call, choose **My Mic (OneMic)** as the microphone.
+3. Check the waveforms. Before going live, each input's waveform shows its source directly, so you can
+   set your interface gain and spot a dead input before anything reaches a call.
+4. Click **GO LIVE**. The button turns red and reads **● LIVE**, and the window gets a red border. From
+   here each input's waveform shows it after its volume and mute, and the mix row shows what the call
+   hears.
+5. In your call, choose **My Mic (OneMic)** as the microphone.
 
 To give the mic a better name, open the **⋮** menu, choose **Manage mics…**, and rename it. Call apps
 show whatever name you pick, so something like `Guitar Lesson` is easy to find in a device list.
@@ -150,7 +154,7 @@ master fader down about 10 dB (and turning up your headphones instead) is usuall
 ### Listen
 
 The headphones button plays the mic through your default output, so you can hear exactly what the call
-is getting. If your DAW already plays to the same headphones you will hear it twice while this is on,
+is getting. It needs a live mic, so it stays greyed out until you go live. If your DAW already plays to the same headphones you will hear it twice while this is on,
 which is expected. Listen is disabled if your default output is one of the mic's own inputs, because
 the mic would then hear itself and howl.
 

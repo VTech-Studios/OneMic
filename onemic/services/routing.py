@@ -158,3 +158,29 @@ def route(profile: MicProfile, graph: Graph, listening: bool, heard: Collection[
         inputs={settings.id: input_state(settings, graph, names) for settings in profile.inputs},
         listen_blocked=blocked,
     )
+
+
+def preview(profile: MicProfile, graph: Graph) -> Routing:
+    """Work out the wiring for metering a mic's inputs before it goes live.
+
+    Each input's tap listens to its source directly, so levels can be set
+    up before anything is offered to a call. Nothing else is linked, and
+    any links left from being live are removed.
+
+    @param profile: the mic being set up.
+    @param graph: the current snapshot.
+    @return: the preview links, with every input's state OFF.
+    """
+    names = NodeNames(profile.slug)
+    desired = frozenset[Link]().union(
+        *(
+            _join(graph.node(settings.source), graph.node(names.tap(settings.id)))
+            for settings in profile.inputs
+        )
+    )
+    return Routing(
+        desired=desired,
+        managed=managed_links(graph, names, ()),
+        inputs={settings.id: InputState.OFF for settings in profile.inputs},
+        listen_blocked=False,
+    )

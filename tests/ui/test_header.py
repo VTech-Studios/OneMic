@@ -1,7 +1,7 @@
 from pytestqt.qtbot import QtBot
 
 from onemic.domain.profile import MicProfile
-from onemic.ui.header import LISTEN_BLOCKED_TIP, LIVE_TEXT, OFF_TEXT, HeaderBar
+from onemic.ui.header import LISTEN_BLOCKED_TIP, LISTEN_OFF_TIP, LIVE_TEXT, OFF_TEXT, HeaderBar
 
 
 def make(qtbot: QtBot) -> HeaderBar:
@@ -43,6 +43,7 @@ def test_the_live_switch_shows_the_real_state(qtbot: QtBot) -> None:
 
     assert header._live.text() == OFF_TEXT
     assert not header._listen.isEnabled()
+    assert header._listen.toolTip() == LISTEN_OFF_TIP
 
 
 def test_listening_is_disabled_when_it_would_feed_back(qtbot: QtBot) -> None:

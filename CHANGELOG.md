@@ -20,6 +20,7 @@ First release.
   volume and mute for the mix.
 - Scrolling waveforms for each visible input and for the mix, coloured ice
   blue, yellow when hot and red where clipped, with a held peak in dBFS.
+  Inputs are metered before going live too, straight from their sources.
 - Listen, to hear exactly what the mic sends through the default output,
   blocked when it would feed back.
 - Auto-relink: missing links are restored within a second when a device or

@@ -10,7 +10,7 @@ from ..domain.graph import Graph, Link, Node
 from ..domain.naming import NodeNames
 from ..domain.profile import MicProfile
 from ..ports import AudioGraph, VolumeControl
-from .routing import InputState, Routing, route
+from .routing import InputState, Routing, preview, route
 from .supervisor import NodeSupervisor
 
 log = logging.getLogger(__name__)
@@ -159,6 +159,20 @@ class MicSession:
         except AudioError:
             self._listening = previous
             raise
+
+    def preview(self, profile: MicProfile) -> SessionStatus:
+        """Feed a mic's input meters straight from their sources while nothing is live.
+
+        Does nothing while a mic is live, because live metering already
+        shows each input after its gain stage.
+
+        @param profile: the mic being set up.
+        @return: the status, which stays not live.
+        """
+        if self._profile is not None:
+            return self.status()
+        self._apply_links(preview(profile, self._graph.snapshot()))
+        return SessionStatus()
 
     def stop(self) -> SessionStatus:
         """Take down every OneMic mic and gain stage.

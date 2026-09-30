@@ -1,7 +1,7 @@
 from onemic.domain.graph import Link
 from onemic.domain.naming import NodeNames
 from onemic.domain.profile import InputSettings, MicProfile
-from onemic.services.routing import InputState, route
+from onemic.services.routing import InputState, preview, route
 from tests.fakes import FakePipeWire
 
 VOICE = InputSettings("v1", "mic2", "Voice")
@@ -136,3 +136,17 @@ def test_taps_are_fed_when_they_exist() -> None:
 
     assert wire.linked(NAMES.stage_output("v1"), NAMES.tap("v1"))
     assert wire.linked(NAMES.mic, NAMES.mix_tap)
+
+
+def test_preview_feeds_each_tap_straight_from_its_source() -> None:
+    wire = FakePipeWire()
+    wire.add_node("mic2", "Audio/Source", outputs=1)
+    wire.add_node(NAMES.tap("v1"), "Stream/Input/Audio", inputs=2)
+    wire.add_node(NAMES.tap("g1"), "Stream/Input/Audio", inputs=2)
+
+    routing = preview(PROFILE, wire.snapshot())
+    for link in routing.to_create:
+        wire.link(link)
+
+    assert wire.linked("mic2", NAMES.tap("v1"))
+    assert routing.inputs == {"v1": InputState.OFF, "g1": InputState.OFF}
