@@ -107,20 +107,17 @@ class SessionClient(QObject):
             self._fail,
         )
 
-    def shutdown(self, stop_mic: bool) -> None:
-        """Finish queued work, then stop the mic if asked, before the application exits.
+    def shutdown(self, keep_live: bool) -> None:
+        """Finish queued work, then tidy up before the application exits.
 
         Runs on the calling thread once the worker has drained, so the final
         teardown cannot race a job still in the queue.
 
-        @param stop_mic: True to take the mic down, False to leave it live without listening.
+        @param keep_live: True to leave a live mic running without Listen.
         """
         self._worker.shutdown()
         try:
-            if stop_mic:
-                self._session.stop()
-            else:
-                self._session.set_listening(False)
+            self._session.close(keep_live)
         except AudioError as error:
             self.failed.emit(str(error))
 

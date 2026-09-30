@@ -96,6 +96,15 @@ class AppController(QObject):
         window.input_solo_toggled.connect(
             lambda key, soloed: self._edit_levels(lambda profile: profile.with_input_soloed(key, soloed))
         )
+        window.input_low_cut_toggled.connect(
+            lambda key, on: self._edit_levels(lambda profile: profile.with_input_low_cut(key, on))
+        )
+        window.input_gate_toggled.connect(
+            lambda key, on: self._edit_levels(lambda profile: profile.with_input_gate(key, on))
+        )
+        window.input_gate_threshold_changed.connect(
+            lambda key, db: self._edit_levels(lambda profile: profile.with_input_gate_threshold(key, db))
+        )
         window.mix_gain_changed.connect(
             lambda gain: self._edit_levels(lambda profile: profile.with_gain(gain))
         )
@@ -209,7 +218,7 @@ class AppController(QObject):
             return
         self._reconcile_timer.stop()
         self._meters.close()
-        self._client.shutdown(stop_mic=choice is CloseChoice.STOP)
+        self._client.shutdown(keep_live=choice is CloseChoice.KEEP_LIVE)
         self._library.save()
         self._window.allow_close()
         self._window.close()

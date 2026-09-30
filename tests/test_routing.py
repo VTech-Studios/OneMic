@@ -1,6 +1,7 @@
 from onemic.domain.graph import Link
 from onemic.domain.naming import NodeNames
 from onemic.domain.profile import InputSettings, MicProfile
+from onemic.domain.stage import StageControls
 from onemic.services.routing import InputState, preview, route
 from tests.fakes import FakePipeWire
 
@@ -16,7 +17,12 @@ def built(listening_sink: bool = True) -> FakePipeWire:
     wire.add_node("mic2", "Audio/Source", outputs=1)
     wire.create(NAMES.mic, "Lesson (OneMic)")
     for settings in PROFILE.inputs:
-        wire.start(NAMES.stage_input(settings.id), NAMES.stage_output(settings.id), settings.label)
+        wire.start(
+            NAMES.stage_input(settings.id),
+            NAMES.stage_output(settings.id),
+            settings.label,
+            StageControls(5.0, 1.0, False, 0.01),
+        )
     return wire
 
 
@@ -51,7 +57,9 @@ def test_input_states_follow_what_exists() -> None:
 
 def test_an_absent_source_waits_and_is_linked_once_it_appears() -> None:
     wire = built()
-    wire.start(NAMES.stage_input("g1"), NAMES.stage_output("g1"), "REAPER")
+    wire.start(
+        NAMES.stage_input("g1"), NAMES.stage_output("g1"), "REAPER", StageControls(5.0, 1.0, False, 0.01)
+    )
 
     assert route(PROFILE, wire.snapshot(), False).inputs["g1"] is InputState.WAITING
 
@@ -138,15 +146,29 @@ def test_taps_are_fed_when_they_exist() -> None:
     assert wire.linked(NAMES.mic, NAMES.mix_tap)
 
 
-def test_preview_feeds_each_tap_straight_from_its_source() -> None:
-    wire = FakePipeWire()
-    wire.add_node("mic2", "Audio/Source", outputs=1)
+def test_preview_runs_each_input_through_its_stage_to_its_tap() -> None:
+    wire = built()
+    wire.remove_node(NAMES.mic)
     wire.add_node(NAMES.tap("v1"), "Stream/Input/Audio", inputs=2)
-    wire.add_node(NAMES.tap("g1"), "Stream/Input/Audio", inputs=2)
 
-    routing = preview(PROFILE, wire.snapshot())
+    routing = preview(PROFILE, wire.snapshot(), listening=False)
     for link in routing.to_create:
         wire.link(link)
 
-    assert wire.linked("mic2", NAMES.tap("v1"))
+    assert wire.linked("mic2", NAMES.stage_input("v1"))
+    assert wire.linked(NAMES.stage_output("v1"), NAMES.tap("v1"))
     assert routing.inputs == {"v1": InputState.OFF, "g1": InputState.OFF}
+
+
+def test_preview_listening_plays_the_stages_to_the_default_output() -> None:
+    wire = built()
+    wire.remove_node(NAMES.mic)
+
+    for link in preview(PROFILE, wire.snapshot(), listening=True, heard={"speakers"}).to_create:
+        wire.link(link)
+    assert wire.linked(NAMES.stage_output("v1"), "speakers")
+
+    routing = preview(PROFILE, wire.snapshot(), listening=False, heard={"speakers"})
+    for link in routing.to_remove:
+        wire.unlink(link)
+    assert not wire.linked(NAMES.stage_output("v1"), "speakers")

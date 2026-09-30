@@ -45,13 +45,19 @@ class MainWindow(QWidget):
     input_gain_changed = Signal(str, float)
     input_mute_toggled = Signal(str, bool)
     input_solo_toggled = Signal(str, bool)
+    input_low_cut_toggled = Signal(str, bool)
+    input_gate_toggled = Signal(str, bool)
+    input_gate_threshold_changed = Signal(str, float)
     input_remove_requested = Signal(str)
     mix_gain_changed = Signal(float)
     mix_mute_toggled = Signal(bool)
     state_changed = Signal(object)
 
-    def __init__(self, palette: Palette, thresholds: LevelThresholds, state: WindowState) -> None:
+    def __init__(
+        self, palette: Palette, thresholds: LevelThresholds, state: WindowState, gate_available: bool = True
+    ) -> None:
         super().__init__(None, self._window_flags())
+        self._gate_available = gate_available
         self._palette = palette
         self._thresholds = thresholds
         self._state = state
@@ -87,7 +93,9 @@ class MainWindow(QWidget):
         if list(self._rows) != [settings.id for settings in profile.inputs]:
             self._rebuild_rows(profile)
         for settings in profile.inputs:
-            self._rows[settings.id].set_values(settings.label, settings.gain, settings.muted, settings.soloed)
+            row = self._rows[settings.id]
+            row.set_values(settings.label, settings.gain, settings.muted, settings.soloed)
+            row.set_filters(settings.low_cut, settings.gate, settings.gate_threshold_db)
         self._mix.set_values(f"Mix → {profile.name}", profile.gain, profile.muted)
         self._update_visibility()
 
@@ -192,6 +200,7 @@ class MainWindow(QWidget):
         row = ChannelRow(MIX_TAP, self._palette, self._thresholds)
         row.set_removable(False)
         row.set_soloable(False)
+        row.set_filterable(False)
         row.gain_changed.connect(lambda _, gain: self.mix_gain_changed.emit(gain))
         row.mute_toggled.connect(lambda _, muted: self.mix_mute_toggled.emit(muted))
         return row
@@ -202,9 +211,13 @@ class MainWindow(QWidget):
         self._rows = {}
         for settings in profile.inputs:
             row = ChannelRow(settings.id, self._palette, self._thresholds)
+            row.set_gate_available(self._gate_available)
             row.gain_changed.connect(self.input_gain_changed.emit)
             row.mute_toggled.connect(self.input_mute_toggled.emit)
             row.solo_toggled.connect(self.input_solo_toggled.emit)
+            row.low_cut_toggled.connect(self.input_low_cut_toggled.emit)
+            row.gate_toggled.connect(self.input_gate_toggled.emit)
+            row.gate_threshold_changed.connect(self.input_gate_threshold_changed.emit)
             row.remove_requested.connect(self.input_remove_requested.emit)
             self._inputs.addWidget(row)
             self._rows[settings.id] = row

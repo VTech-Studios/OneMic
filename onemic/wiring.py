@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 
 from .config import Config
 from .domain.levels import LevelThresholds
-from .infrastructure.gain_stage import PwLoopbackStages
+from .infrastructure.gain_stage import FilterChainStages, PwCliStageControl
 from .infrastructure.pipewire import PipeWireGraph
 from .infrastructure.process import SubprocessLauncher, SubprocessRunner
 from .infrastructure.stores import JsonProfileStore, JsonWindowStateStore
@@ -32,24 +33,35 @@ class Application:
     controller: AppController
 
 
-def build_session(graph: PipeWireGraph, runner: SubprocessRunner, launcher: SubprocessLauncher) -> MicSession:
+def build_session(
+    graph: PipeWireGraph,
+    runner: SubprocessRunner,
+    launcher: SubprocessLauncher,
+    stage_dir: Path,
+    gate_plugin: str | None,
+) -> MicSession:
     """Wire the session to the real PipeWire tools.
 
     @param graph: reads and rewires the audio graph.
     @param runner: runs short commands.
     @param launcher: starts long-running helpers.
+    @param stage_dir: where gain stage configurations are written.
+    @param gate_plugin: the noise gate's LV2 URI, or None if it is not installed.
     @return: a session with no mic live yet.
     """
     supervisor = NodeSupervisor(
         graph=graph,
         mics=PactlVirtualMic(runner),
-        stages=PwLoopbackStages(launcher),
+        stages=FilterChainStages(launcher, stage_dir, gate_plugin),
         launcher=launcher,
     )
-    return MicSession(graph=graph, supervisor=supervisor, volumes=WpctlVolume(runner))
+    stage_control = PwCliStageControl(runner, with_gate=gate_plugin is not None)
+    return MicSession(graph=graph, supervisor=supervisor, volumes=WpctlVolume(runner), stages=stage_control)
 
 
-def build_application(config: Config, quit_application: Callable[[], None]) -> Application:
+def build_application(
+    config: Config, quit_application: Callable[[], None], gate_plugin: str | None = None
+) -> Application:
     """Build the application. This is the composition root, the one place that picks implementations.
 
     Everything else receives its collaborators through its constructor, so
@@ -58,15 +70,19 @@ def build_application(config: Config, quit_application: Callable[[], None]) -> A
 
     @param config: where files live.
     @param quit_application: ends the Qt event loop once the window has closed.
+    @param gate_plugin: the noise gate's LV2 URI, or None if it is not installed.
     @return: the window and its controller, not yet shown.
     """
     runner, launcher = SubprocessRunner(), SubprocessLauncher()
     graph = PipeWireGraph(runner)
     palette, thresholds = Palette(), LevelThresholds()
     window_store = JsonWindowStateStore(config.window_path)
-    window = MainWindow(palette, thresholds, window_store.load())
+    window = MainWindow(palette, thresholds, window_store.load(), gate_available=gate_plugin is not None)
     client = SessionClient(
-        build_session(graph, runner, launcher), graph, LatestJobWorker(), MainThreadDispatcher(window)
+        build_session(graph, runner, launcher, config.stage_dir, gate_plugin),
+        graph,
+        LatestJobWorker(),
+        MainThreadDispatcher(window),
     )
     meters = MeterPump(Metering(PwRecordTaps(launcher)), window.show_levels, window)
     controller = AppController(

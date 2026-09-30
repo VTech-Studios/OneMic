@@ -8,9 +8,8 @@ from dataclasses import dataclass
 from ..domain.graph import Graph, Node
 from ..domain.naming import NodeNames, is_onemic_node, is_tap, mic_slug
 from ..domain.profile import InputSettings, MicProfile
+from ..domain.stage import STAGE_MARKER, STAGE_PROGRAM, stage_controls
 from ..ports import AudioGraph, GainStageDriver, ProcessLauncher, VirtualMicDriver
-
-STAGE_PROGRAM = "pw-loopback"
 
 
 @dataclass(frozen=True)
@@ -56,17 +55,18 @@ class NodeSupervisor:
         self._clock = clock
         self._started: dict[str, float] = {}
 
-    def ensure(self, profile: MicProfile, graph: Graph) -> Graph:
+    def ensure(self, profile: MicProfile, graph: Graph, with_mic: bool = True) -> Graph:
         """Bring the mic's nodes into existence and remove any that should not exist.
 
-        @param profile: the live mic.
+        @param profile: the mic.
         @param graph: the current snapshot.
+        @param with_mic: False to start only the gain stages, for previewing before going live.
         @return: a snapshot in which new nodes have had time to publish their ports.
         """
         names = NodeNames(profile.slug)
         self._stop_duplicates(names, graph)
         self._stop_stale(profile, names, graph)
-        wanted = [self._ensure_mic(profile, names, graph)]
+        wanted = [self._ensure_mic(profile, names, graph)] if with_mic else []
         for settings in profile.inputs:
             wanted += self._ensure_stage(profile, settings, names, graph)
         missing = [name for name in wanted if not self._ready(graph, name)]
@@ -92,6 +92,19 @@ class NodeSupervisor:
         for node in doomed:
             self._started.pop(node.name, None)
 
+    def remove(self, graph: Graph, names: NodeNames) -> None:
+        """Remove one mic's nodes, such as the stages left from previewing it.
+
+        @param graph: the current snapshot.
+        @param names: the mic whose nodes go.
+        """
+        owned = [node for node in graph.nodes if names.owns(node.name) and not is_tap(node.name)]
+        if graph.node(names.mic):
+            self._mics.remove(names.mic)
+        self._terminate(node for node in owned if node.name != names.mic)
+        for node in owned:
+            self._started.pop(node.name, None)
+
     def _ensure_mic(self, profile: MicProfile, names: NodeNames, graph: Graph) -> str:
         if graph.node(names.mic) is None and not self._starting(names.mic):
             self._mics.create(names.mic, f"{profile.name} (OneMic)")
@@ -115,7 +128,8 @@ class NodeSupervisor:
         pair = [names.stage_input(settings.id), names.stage_output(settings.id)]
         if any(graph.node(name) is None for name in pair) and not self._starting(pair[0]):
             self._terminate(graph.node(name) for name in pair)
-            self._stages.start(pair[0], pair[1], f"OneMic {profile.name}: {settings.label}")
+            controls = stage_controls(settings, profile.is_silenced(settings))
+            self._stages.start(pair[0], pair[1], f"OneMic {profile.name}: {settings.label}", controls)
             self._started[pair[0]] = self._clock()
         return pair
 
@@ -150,7 +164,7 @@ class NodeSupervisor:
 
     def _terminate(self, nodes: Iterable[Node | None]) -> None:
         for pid in {node.process_id for node in nodes if node and node.process_id}:
-            self._launcher.terminate(pid, STAGE_PROGRAM)
+            self._launcher.terminate(pid, STAGE_PROGRAM, STAGE_MARKER)
 
     @staticmethod
     def _ready(graph: Graph, name: str) -> bool:

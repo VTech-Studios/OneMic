@@ -4,6 +4,7 @@ from onemic.domain.errors import AudioError
 from onemic.domain.graph import Graph
 from onemic.domain.naming import NodeNames
 from onemic.domain.profile import InputSettings, MicProfile
+from onemic.domain.stage import StageControls
 from onemic.services.routing import InputState
 from onemic.services.session import MicSession
 from onemic.services.supervisor import NodeSupervisor, Timing
@@ -24,6 +25,10 @@ def wire() -> FakePipeWire:
     return pipewire
 
 
+def controls(wire: FakePipeWire, input_id: str) -> StageControls:
+    return wire.stage_controls[wire.node(NAMES.stage_input(input_id)).id]
+
+
 def session_for(wire: FakePipeWire, clock: list[float] | None = None) -> MicSession:
     now = clock if clock is not None else [0.0]
     supervisor = NodeSupervisor(
@@ -35,7 +40,7 @@ def session_for(wire: FakePipeWire, clock: list[float] | None = None) -> MicSess
         sleep=lambda _: None,
         clock=lambda: now[0],
     )
-    return MicSession(graph=wire, supervisor=supervisor, volumes=wire)
+    return MicSession(graph=wire, supervisor=supervisor, volumes=wire, stages=wire)
 
 
 def test_going_live_builds_and_wires_the_mic(wire: FakePipeWire) -> None:
@@ -51,9 +56,9 @@ def test_going_live_builds_and_wires_the_mic(wire: FakePipeWire) -> None:
 def test_levels_are_applied_to_each_stage_and_the_mic(wire: FakePipeWire) -> None:
     session_for(wire).go_live(LESSON)
 
-    assert wire.volumes[wire.node(NAMES.stage_output("v1")).id] == 0.8
+    assert controls(wire, "v1").multiplier == pytest.approx(0.8**3)
     assert wire.volumes[wire.node(NAMES.mic).id] == 0.9
-    assert wire.mutes[wire.node(NAMES.stage_output("g1")).id] is False
+    assert controls(wire, "g1").multiplier == 1.0
 
 
 def test_unchanged_levels_are_not_sent_again(wire: FakePipeWire) -> None:
@@ -72,8 +77,8 @@ def test_level_changes_apply_without_rebuilding(wire: FakePipeWire) -> None:
 
     session.apply_levels(LESSON.with_input_gain("v1", 0.3).with_input_muted("g1", True))
 
-    assert wire.volumes[wire.node(NAMES.stage_output("v1")).id] == 0.3
-    assert wire.mutes[wire.node(NAMES.stage_output("g1")).id] is True
+    assert controls(wire, "v1").multiplier == pytest.approx(0.3**3)
+    assert controls(wire, "g1").multiplier == 0.0
     assert len(wire.started_stages) == 2
 
 
@@ -272,7 +277,7 @@ def test_level_changes_reach_a_restarted_stage(wire: FakePipeWire) -> None:
 
     session.apply_levels(LESSON.with_input_gain("v1", 0.2))
 
-    assert wire.volumes[wire.node(NAMES.stage_output("v1")).id] == 0.2
+    assert controls(wire, "v1").multiplier == pytest.approx(0.2**3)
 
 
 def test_a_level_change_that_fails_is_retried_on_the_next_pass(wire: FakePipeWire) -> None:
@@ -283,7 +288,7 @@ def test_a_level_change_that_fails_is_retried_on_the_next_pass(wire: FakePipeWir
 
     session.reconcile()
 
-    assert wire.volumes[wire.node(NAMES.stage_output("v1")).id] == 0.8
+    assert controls(wire, "v1").multiplier == pytest.approx(0.8**3)
 
 
 def test_adopting_removes_any_other_mic_left_live(wire: FakePipeWire) -> None:
@@ -296,25 +301,96 @@ def test_adopting_removes_any_other_mic_left_live(wire: FakePipeWire) -> None:
     assert wire.has_node(NAMES.mic)
 
 
-def test_preview_links_sources_to_taps_while_nothing_is_live(wire: FakePipeWire) -> None:
+def test_preview_runs_the_stages_without_a_mic(wire: FakePipeWire) -> None:
     wire.add_node(NAMES.tap("v1"), "Stream/Input/Audio", inputs=2)
 
     status = session_for(wire).preview(LESSON)
 
     assert not status.live
-    assert wire.linked("mic2", NAMES.tap("v1"))
     assert not wire.has_node(NAMES.mic)
+    assert wire.linked("mic2", NAMES.stage_input("v1"))
+    assert wire.linked(NAMES.stage_output("v1"), NAMES.tap("v1"))
+    assert controls(wire, "v1").multiplier == pytest.approx(0.8**3)
 
 
-def test_going_live_moves_a_tap_from_the_source_to_its_stage(wire: FakePipeWire) -> None:
-    wire.add_node(NAMES.tap("v1"), "Stream/Input/Audio", inputs=2)
+def test_listening_while_previewing_plays_the_inputs(wire: FakePipeWire) -> None:
     session = session_for(wire)
     session.preview(LESSON)
 
+    assert session.set_listening(True).listening
+
+    assert wire.linked(NAMES.stage_output("v1"), "speakers")
+
+
+def test_going_live_keeps_the_previewed_stages_and_moves_listening_to_the_mic(wire: FakePipeWire) -> None:
+    session = session_for(wire)
+    session.preview(LESSON)
+    session.set_listening(True)
+    stage = wire.node(NAMES.stage_input("v1")).serial
+
     session.go_live(LESSON)
 
-    assert wire.linked(NAMES.stage_output("v1"), NAMES.tap("v1"))
-    assert not wire.linked("mic2", NAMES.tap("v1"))
+    assert wire.node(NAMES.stage_input("v1")).serial == stage
+    assert wire.linked(NAMES.mic, "speakers")
+    assert not wire.linked(NAMES.stage_output("v1"), "speakers")
+
+
+def test_previewing_another_mic_removes_the_first_ones_stages(wire: FakePipeWire) -> None:
+    session = session_for(wire)
+    session.preview(LESSON)
+
+    session.preview(MicProfile("Stream", (InputSettings("s1", "mic2", "Voice"),)))
+
+    assert not wire.has_node(NAMES.stage_input("v1"))
+    assert wire.has_node("onemic.stream.in.s1")
+
+
+def test_level_changes_apply_while_previewing(wire: FakePipeWire) -> None:
+    session = session_for(wire)
+    session.preview(LESSON)
+
+    session.apply_levels(LESSON.with_input_gate("v1", True).with_input_low_cut("v1", True))
+
+    assert controls(wire, "v1").gate_on
+    assert controls(wire, "v1").low_cut_hz == 100.0
+
+
+def test_closing_while_previewing_removes_the_stages(wire: FakePipeWire) -> None:
+    session = session_for(wire)
+    session.preview(LESSON)
+
+    session.close(keep_live=True)
+
+    assert not [node.name for node in wire.nodes if node.name.startswith("onemic")]
+
+
+def test_closing_can_keep_a_live_mic_but_not_its_listening(wire: FakePipeWire) -> None:
+    session = session_for(wire)
+    session.go_live(LESSON)
+    session.set_listening(True)
+
+    session.close(keep_live=True)
+
+    assert wire.has_node(NAMES.mic)
+    assert not wire.linked(NAMES.mic, "speakers")
+
+
+def test_closing_without_keeping_stops_the_mic(wire: FakePipeWire) -> None:
+    session = session_for(wire)
+    session.go_live(LESSON)
+
+    session.close(keep_live=False)
+
+    assert not wire.has_node(NAMES.mic)
+
+
+def test_new_stages_start_with_their_filters(wire: FakePipeWire) -> None:
+    gated = LESSON.with_input_gate("v1", True).with_input_gate_threshold("v1", -30.0)
+
+    session_for(wire).go_live(gated)
+
+    assert wire.started_controls[NAMES.stage_input("v1")].gate_on
+    assert wire.started_controls[NAMES.stage_input("v1")].gate_threshold == pytest.approx(10 ** (-30 / 20))
 
 
 def test_preview_changes_nothing_while_live(wire: FakePipeWire) -> None:
@@ -332,5 +408,5 @@ def test_soloing_an_input_mutes_the_others_on_the_mic(wire: FakePipeWire) -> Non
 
     session.apply_levels(LESSON.with_input_soloed("g1", True))
 
-    assert wire.mutes[wire.node(NAMES.stage_output("v1")).id] is True
-    assert wire.mutes[wire.node(NAMES.stage_output("g1")).id] is False
+    assert controls(wire, "v1").multiplier == 0.0
+    assert controls(wire, "g1").multiplier == 1.0

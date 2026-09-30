@@ -97,3 +97,30 @@ def test_solo_reports_the_row_key_and_shows_without_echo(qtbot: QtBot, row: Chan
         row._solo.click()
 
     assert soloed.args == ["v1", False]
+
+
+def test_filters_show_without_echo_and_report_changes(qtbot: QtBot, row: ChannelRow) -> None:
+    with qtbot.assertNotEmitted(row.gate_toggled), qtbot.assertNotEmitted(row.low_cut_toggled):
+        row.set_filters(low_cut=True, gate=False, gate_threshold_db=-40.0)
+    assert row._low_cut.isChecked()
+    assert row.meter._gate_db is None
+
+    with qtbot.waitSignal(row.gate_toggled) as gate:
+        row._gate.click()
+
+    assert gate.args == ["v1", True]
+    assert row.meter._gate_db == -40.0
+
+
+def test_a_dragged_threshold_is_reported_with_the_row_key(qtbot: QtBot, row: ChannelRow) -> None:
+    with qtbot.waitSignal(row.gate_threshold_changed) as moved:
+        row.meter.threshold_changed.emit(-25.0)
+
+    assert moved.args == ["v1", -25.0]
+
+
+def test_the_gate_is_greyed_out_without_its_plugin(row: ChannelRow) -> None:
+    row.set_gate_available(False)
+
+    assert not row._gate.isEnabled()
+    assert "lsp-plugins" in row._gate.toolTip()

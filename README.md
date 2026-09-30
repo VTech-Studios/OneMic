@@ -27,7 +27,8 @@ and applications come and go.
 | Master volume and mute | For the mix as a whole, which is what the call hears. |
 | Live waveforms and meters | A smoothly scrolling waveform and a DAW-style level meter for each input and for the mix. Ice blue when fine, yellow when running hot, red where it clipped. |
 | Peak readout with hold | The highest recent peak in dBFS next to each waveform, held long enough to read. |
-| Listen | Hear exactly what the mic is sending, through your default output. |
+| Noise gate and low-cut | Per input. A 100 Hz low-cut removes rumble, and a gate silences an input below a threshold you drag on its meter. |
+| Listen | Hear exactly what the mic is sending, through your default output. Before going live, hear your inputs as they will be sent. |
 | Auto-relink | Opened REAPER after going live? Replugged the interface? OneMic links it back within a second. |
 | Small and always on top | Sits in a screen corner, shows two inputs and the mix, and expands to show everything. |
 | Remembers its place | Drag it to any corner of any screen and it snaps there, and reopens there next time. |
@@ -43,16 +44,18 @@ Nothing in OneMic touches audio samples on the way to the call. It only builds a
 piece of the PipeWire graph, so the audio path is exactly as fast and as reliable as PipeWire itself:
 
 ```
-voice mic ────► gain stage (volume, mute) ──┐
-REAPER out 1/2 ► gain stage (volume, mute) ──┼──► OneMic virtual mic ──► your call
-backing track ─► gain stage (volume, mute) ──┘          │
-                                                        └──► default output (only while Listen is on)
+voice mic ────► gain stage ──┐
+REAPER out 1/2 ► gain stage ──┼──► OneMic virtual mic ──► your call
+backing track ─► gain stage ──┘          │
+                                         └──► default output (only while Listen is on)
+
+gain stage = low-cut ► volume, mute and solo ► noise gate
 ```
 
 | Piece | Built with | Why |
 | --- | --- | --- |
 | Virtual mic | `pactl load-module module-null-sink` with the `Audio/Source/Virtual` class | The simplest virtual microphone PipeWire offers. It survives OneMic closing. |
-| Gain stages | one `pw-loopback` process per input | A link has no volume of its own. A loopback stream does, so each input gets a volume and mute without changing the source for other applications. |
+| Gain stages | one PipeWire filter chain process per input | A link has no volume or processing of its own. A filter chain sits between the source and the mic, so each input gets a low-cut, volume and gate without changing the source for other applications. Controls change live through `pw-cli`, so nothing restarts when you move them. |
 | Links | `pw-link`, planned from `pw-dump` snapshots | OneMic compares the graph with what the mic should look like once a second, links anything missing and removes anything stale. |
 | Levels | `wpctl set-volume` and `set-mute` | The same volume scale as the desktop's own mixer. |
 | Waveforms | one `pw-record` tap per visible signal | Metering is only another link, so it can never change or interrupt what the call hears. |
@@ -63,7 +66,7 @@ and nothing is recorded any differently.
 ## Platform support
 
 OneMic runs on **Linux with PipeWire** only. Every part of it talks to PipeWire through the tools that
-ship with it (`pw-dump`, `pw-link`, `pw-loopback`, `pw-record`) plus `pactl` from `pipewire-pulse` and
+ship with it (`pipewire`, `pw-dump`, `pw-link`, `pw-cli`, `pw-record`) plus `pactl` from `pipewire-pulse` and
 `wpctl` from WirePlumber. That covers every current desktop distribution using PipeWire, which is most of
 them. It will not work on a PulseAudio-only or JACK-only system.
 
@@ -77,12 +80,17 @@ dragging and corner snapping will not work there.
 - Python 3.12 or newer
 - `python-pyside6` 6.11 or newer
 - `python-numpy`
+- Optional: `lsp-plugins-lv2`, for the noise gate
 
 On Arch Linux:
 
 ```bash
-sudo pacman -S pipewire pipewire-pulse wireplumber python-pyside6 python-numpy python-pipx
+sudo pacman -S pipewire pipewire-pulse wireplumber python-pyside6 python-numpy python-pipx lsp-plugins-lv2
 ```
+
+PipeWire has a built-in noise gate, but the one in current releases measures its own output, so once it
+closes it never opens again. OneMic uses the LSP gate instead. Without `lsp-plugins-lv2` everything else
+works, and the gate button is greyed out with a note saying what to install.
 
 If you use a DAW through JACK, install `pipewire-jack` as well so it appears in the PipeWire graph.
 
@@ -126,8 +134,8 @@ Without `pipx`, you can run it straight from the source folder with `python -m o
 1. Start OneMic. It opens in the bottom-right corner with an empty mic called **My Mic**.
 2. Click **Add input…**, pick a source, and repeat for each signal you want. Sources are grouped into
    microphones and inputs, applications, and speakers (what they are playing).
-3. Check the waveforms. Before going live, each input's waveform shows its source directly, so you can
-   set your interface gain and spot a dead input before anything reaches a call.
+3. Check the waveforms. Before going live, each input's waveform and Listen show it exactly as it will be
+   sent, so you can set your interface gain and spot a dead input before anything reaches a call.
 4. Click **GO LIVE**. The button turns red and reads **● LIVE**, and the window gets a red border. From
    here each input's waveform shows it after its volume and mute, and the mix row shows what the call
    hears.
@@ -161,12 +169,28 @@ Each column of the waveform is coloured by its own level, so a clip shows red ex
 while the rest stays blue. Aim for a mix peaking around -10 dBFS. If a DAW is involved, pulling its
 master fader down about 10 dB (and turning up your headphones instead) is usually all it takes.
 
+### Noise gate and low-cut
+
+Each input has two small buttons next to its level meter:
+
+- **LC** switches on a 100 Hz low-cut, which removes rumble from fans, desks and floors without
+  touching a voice or a guitar.
+- **G** switches on a noise gate. Its threshold appears as a white marker on the input's meter. Drag it
+  to just above where the meter sits when you are silent, and the input goes quiet between phrases and
+  opens the moment you speak or play. It opens in 5 ms, holds for 50 ms and closes over 150 ms, so it
+  does not chop a guitar's sustain.
+
+Both run inside the input's gain stage, after the volume, so the threshold is compared with exactly the
+level the meter shows. Set them up before going live, while the waveforms preview each input.
+
 ### Listen
 
-The headphones button plays the mic through your default output, so you can hear exactly what the call
-is getting. It needs a live mic, so it stays greyed out until you go live. If your DAW already plays to the same headphones you will hear it twice while this is on,
-which is expected. Listen is disabled if your default output is one of the mic's own inputs, because
-the mic would then hear itself and howl.
+The headphones button plays through your default output. Once live it plays exactly what the call is
+getting. Before going live it plays your inputs as they will be sent, with their volume, mute, solo,
+low-cut and gate, so you can set everything up by ear first. If your interface or DAW already sends a
+signal to the same headphones (the 2i2's direct monitor, say), you will hear it twice while this is on,
+which is expected. Listen is disabled if your default output is one of the mic's own inputs, because the
+mic would then hear itself and howl.
 
 ### Compact and expanded
 
@@ -235,8 +259,8 @@ running, and a JACK application needs `pipewire-jack`.
 `qpwgraph` shows the whole graph, where OneMic's nodes all start with `onemic.`.
 
 **Remove a mic by hand.** If OneMic is not running and a mic is still live, `pactl list short modules |
-grep onemic` shows the module to `pactl unload-module`, and `pkill -f 'pw-loopback.*onemic'` stops the
-gain stages. Restarting PipeWire also clears everything.
+grep onemic` shows the module to `pactl unload-module`, and `pkill -f 'onemic/stages/'` stops the gain
+stages. Restarting PipeWire also clears everything.
 
 ## Development
 
@@ -286,8 +310,9 @@ A few decisions worth knowing before changing things:
   running when you clicked cannot report back over it and flip the controls to a state you just left.
 - **Failures undo themselves.** A mic that fails part-way through going live is removed again, and a
   failed listen change keeps the old setting, so the controls always match what is really running.
-- **OneMic only ever stops `pw-loopback`.** Process ids come from the graph, and every one is checked
-  against `/proc` before it is signalled.
+- **OneMic only ever stops its own gain stages.** They run as the `pipewire` program, the same as the
+  audio server, so a process id from the graph is only signalled after `/proc` confirms both the
+  program and that its command line carries OneMic's stage directory.
 - **A call app recording the mic is never unlinked.** Routing only manages links into OneMic's own nodes,
   out of its gain stages, and from the mic to the outputs OneMic itself played it through for Listen.
   A link you make by hand from the mic to anything else is left alone.

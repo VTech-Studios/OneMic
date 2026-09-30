@@ -11,7 +11,7 @@ from .widgets import icon_button, set_icon
 LIVE_TEXT = "● LIVE"
 OFF_TEXT = "GO LIVE"
 LISTEN_TIP = "Listen: hear exactly what the mic is sending, through your default output"
-LISTEN_OFF_TIP = "Go live first. Listen plays what the mic is sending, so it needs a live mic"
+LISTEN_OFF_TIP = "Listen: hear your inputs through your default output, as they will be sent once live"
 LISTEN_BLOCKED_TIP = "Listening is off because the default output is one of this mic's inputs"
 
 
@@ -70,7 +70,7 @@ class HeaderBar(QWidget):
             button.blockSignals(False)
         self._live.setText(LIVE_TEXT if live else OFF_TEXT)
         self._live.setToolTip("Stop the mic" if live else "Make this mic available to call apps")
-        self._listen.setEnabled(live and not listen_blocked)
+        self._listen.setEnabled(not listen_blocked)
         self._listen.setToolTip(self._listen_tip(live, listen_blocked))
 
     @staticmethod

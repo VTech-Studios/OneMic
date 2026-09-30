@@ -2,12 +2,16 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, replace
+from typing import Any
 
 from .errors import ProfileError
 
 MAX_INPUTS = 8
 MAX_GAIN = 1.5
 MAX_NAME_LENGTH = 40
+DEFAULT_GATE_DB = -45.0
+MIN_GATE_DB = -60.0
+MAX_GATE_DB = -10.0
 
 _ALLOWED_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9 ()&,.+_-]*")
 _NOT_SLUG = re.compile(r"[^a-z0-9]+")
@@ -43,6 +47,18 @@ def slugify(name: str) -> str:
     return _NOT_SLUG.sub("-", name.lower()).strip("-")
 
 
+def clamp_gate(threshold_db: float) -> float:
+    """Keep a gate threshold where it can do something useful.
+
+    Below -60 dB a gate would never close on a real room, and above -10 dB
+    it would chop into normal playing and speech.
+
+    @param threshold_db: the requested threshold in dBFS.
+    @return: the threshold limited to MIN_GATE_DB to MAX_GATE_DB.
+    """
+    return min(max(threshold_db, MIN_GATE_DB), MAX_GATE_DB)
+
+
 def clamp_gain(gain: float) -> float:
     """Keep a gain within what the volume controls accept.
 
@@ -57,7 +73,7 @@ def clamp_gain(gain: float) -> float:
 
 @dataclass(frozen=True)
 class InputSettings:
-    """One signal feeding a mic, and how loud it should be.
+    """One signal feeding a mic, and how it is processed on the way.
 
     The id is generated once and never changes, so renaming or reordering
     inputs never confuses which gain stage belongs to which input.
@@ -69,6 +85,9 @@ class InputSettings:
     gain: float = 1.0
     muted: bool = False
     soloed: bool = False
+    low_cut: bool = False
+    gate: bool = False
+    gate_threshold_db: float = DEFAULT_GATE_DB
 
 
 @dataclass(frozen=True)
@@ -122,7 +141,7 @@ class MicProfile:
         @param gain: the new gain, clamped to the allowed range.
         @return: a copy of the mic with the new gain.
         """
-        return self._replace_input(replace(self.input(input_id), gain=clamp_gain(gain)))
+        return self._edit_input(input_id, gain=clamp_gain(gain))
 
     def with_input_muted(self, input_id: str, muted: bool) -> MicProfile:
         """Mute or unmute one input.
@@ -131,7 +150,7 @@ class MicProfile:
         @param muted: True to silence the input without removing it.
         @return: a copy of the mic with the new mute state.
         """
-        return self._replace_input(replace(self.input(input_id), muted=muted))
+        return self._edit_input(input_id, muted=muted)
 
     def with_input_soloed(self, input_id: str, soloed: bool) -> MicProfile:
         """Solo or unsolo one input.
@@ -140,7 +159,34 @@ class MicProfile:
         @param soloed: True to hear this input alongside any other soloed ones only.
         @return: a copy of the mic with the new solo state.
         """
-        return self._replace_input(replace(self.input(input_id), soloed=soloed))
+        return self._edit_input(input_id, soloed=soloed)
+
+    def with_input_low_cut(self, input_id: str, low_cut: bool) -> MicProfile:
+        """Switch one input's low-cut filter on or off.
+
+        @param input_id: the input's generated id.
+        @param low_cut: True to remove rumble below the low-cut frequency.
+        @return: a copy of the mic with the new low-cut state.
+        """
+        return self._edit_input(input_id, low_cut=low_cut)
+
+    def with_input_gate(self, input_id: str, gate: bool) -> MicProfile:
+        """Switch one input's noise gate on or off.
+
+        @param input_id: the input's generated id.
+        @param gate: True to silence the input whenever it falls below its threshold.
+        @return: a copy of the mic with the new gate state.
+        """
+        return self._edit_input(input_id, gate=gate)
+
+    def with_input_gate_threshold(self, input_id: str, threshold_db: float) -> MicProfile:
+        """Move one input's gate threshold.
+
+        @param input_id: the input's generated id.
+        @param threshold_db: the level in dBFS the gate opens at, clamped to the allowed range.
+        @return: a copy of the mic with the new threshold.
+        """
+        return self._edit_input(input_id, gate_threshold_db=clamp_gate(threshold_db))
 
     def is_silenced(self, settings: InputSettings) -> bool:
         """Decide whether an input is heard, taking every input's solo into account.
@@ -180,7 +226,13 @@ class MicProfile:
         """
         return replace(self, name=validate_name(name))
 
-    def _replace_input(self, settings: InputSettings) -> MicProfile:
-        return replace(
-            self, inputs=tuple(settings if item.id == settings.id else item for item in self.inputs)
-        )
+    def _edit_input(self, input_id: str, **changes: Any) -> MicProfile:
+        """Replace some of one input's settings, keeping its place in the list.
+
+        @param input_id: the input's generated id.
+        @param changes: the settings to change, by field name.
+        @return: a copy of the mic with the edited input.
+        @raise ProfileError: if the mic has no such input.
+        """
+        edited = replace(self.input(input_id), **changes)
+        return replace(self, inputs=tuple(edited if item.id == input_id else item for item in self.inputs))

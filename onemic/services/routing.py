@@ -160,27 +160,31 @@ def route(profile: MicProfile, graph: Graph, listening: bool, heard: Collection[
     )
 
 
-def preview(profile: MicProfile, graph: Graph) -> Routing:
-    """Work out the wiring for metering a mic's inputs before it goes live.
+def preview(profile: MicProfile, graph: Graph, listening: bool, heard: Collection[str] = ()) -> Routing:
+    """Work out the wiring for setting a mic up before it goes live.
 
-    Each input's tap listens to its source directly, so levels can be set
-    up before anything is offered to a call. Nothing else is linked, and
-    any links left from being live are removed.
+    Each input runs through its gain stage exactly as it will when live, so
+    its meter and Listen show the input with its volume, mute, solo and
+    filters applied. There is no mic yet, so Listen plays the stages
+    straight to the default output instead.
 
     @param profile: the mic being set up.
     @param graph: the current snapshot.
+    @param listening: True to hear the processed inputs through the default output.
+    @param heard: names of the outputs OneMic has linked for listening.
     @return: the preview links, with every input's state OFF.
     """
     names = NodeNames(profile.slug)
-    desired = frozenset[Link]().union(
-        *(
-            _join(graph.node(settings.source), graph.node(names.tap(settings.id)))
-            for settings in profile.inputs
-        )
-    )
+    blocked = is_listen_blocked(profile, graph)
+    sink = graph.node(graph.default_sink) if listening and not blocked and graph.default_sink else None
+    desired: frozenset[Link] = frozenset()
+    for settings in profile.inputs:
+        stage_out = graph.node(names.stage_output(settings.id))
+        desired |= _join(graph.node(settings.source), graph.node(names.stage_input(settings.id)))
+        desired |= _join(stage_out, graph.node(names.tap(settings.id))) | _join(stage_out, sink)
     return Routing(
         desired=desired,
-        managed=managed_links(graph, names, ()),
+        managed=managed_links(graph, names, heard),
         inputs={settings.id: InputState.OFF for settings in profile.inputs},
-        listen_blocked=False,
+        listen_blocked=blocked,
     )

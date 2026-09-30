@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-REQUIRED_TOOLS = ("pw-dump", "pw-link", "pw-loopback", "pw-record", "pactl", "wpctl")
+REQUIRED_TOOLS = ("pipewire", "pw-dump", "pw-link", "pw-cli", "pw-record", "pactl", "wpctl")
 
 
 @dataclass(frozen=True)
@@ -25,6 +25,17 @@ class Config:
     @property
     def window_path(self) -> Path:
         return self.config_dir / "window.json"
+
+    @property
+    def stage_dir(self) -> Path:
+        """Where gain stage configurations are written.
+
+        The path ends in the stage marker, which is how OneMic recognises
+        its own pipewire processes before it stops one.
+
+        @return: the directory.
+        """
+        return self.runtime_dir / "onemic" / "stages"
 
     @property
     def lock_path(self) -> Path:

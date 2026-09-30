@@ -29,7 +29,7 @@ def test_missing_tools_are_listed() -> None:
         "wpctl",
     ]
     assert app.missing_tools(lambda tool: "/usr/bin/x") == []
-    assert "pw-loopback" in REQUIRED_TOOLS
+    assert "pw-cli" in REQUIRED_TOOLS
 
 
 def test_version_flag(capsys: pytest.CaptureFixture[str]) -> None:

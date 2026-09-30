@@ -6,7 +6,14 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from ..domain.profile import InputSettings, MicProfile, clamp_gain, validate_name
+from ..domain.profile import (
+    DEFAULT_GATE_DB,
+    InputSettings,
+    MicProfile,
+    clamp_gain,
+    clamp_gate,
+    validate_name,
+)
 from ..domain.window import Corner, WindowState
 
 FORMAT_VERSION = 1
@@ -60,6 +67,9 @@ def _input_to_json(settings: InputSettings) -> dict[str, Any]:
         "gain": settings.gain,
         "muted": settings.muted,
         "soloed": settings.soloed,
+        "low_cut": settings.low_cut,
+        "gate": settings.gate,
+        "gate_threshold_db": settings.gate_threshold_db,
     }
 
 
@@ -71,6 +81,9 @@ def _input_from_json(item: Mapping[str, Any]) -> InputSettings:
         gain=clamp_gain(float(item.get("gain", 1.0))),
         muted=bool(item.get("muted", False)),
         soloed=bool(item.get("soloed", False)),
+        low_cut=bool(item.get("low_cut", False)),
+        gate=bool(item.get("gate", False)),
+        gate_threshold_db=clamp_gate(float(item.get("gate_threshold_db", DEFAULT_GATE_DB))),
     )
 
 

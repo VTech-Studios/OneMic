@@ -46,7 +46,7 @@ def test_detached_helpers_can_be_terminated_when_they_are_the_expected_program()
     launcher = SubprocessLauncher()
     pid = launcher.spawn_detached(["sleep", "30"])
 
-    launcher.terminate(pid, "sleep")
+    launcher.terminate(pid, "sleep", "30")
 
     assert not Path(f"/proc/{pid}").exists()
 
@@ -54,19 +54,32 @@ def test_detached_helpers_can_be_terminated_when_they_are_the_expected_program()
 IMPOSSIBLE_PID = 2**23
 
 
+def fake_process(proc: Path, comm: str, cmdline: str) -> None:
+    (proc / str(IMPOSSIBLE_PID)).mkdir()
+    (proc / str(IMPOSSIBLE_PID) / "comm").write_text(f"{comm}\n")
+    (proc / str(IMPOSSIBLE_PID) / "cmdline").write_bytes(cmdline.replace(" ", "\0").encode())
+
+
 def test_terminate_refuses_a_process_running_something_else(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
-    (tmp_path / str(IMPOSSIBLE_PID)).mkdir()
-    (tmp_path / str(IMPOSSIBLE_PID) / "comm").write_text("pipewire-pulse\n")
+    fake_process(tmp_path, "pipewire-pulse", "/usr/bin/pipewire-pulse")
 
-    SubprocessLauncher(proc=tmp_path).terminate(IMPOSSIBLE_PID, "pw-loopback")
+    SubprocessLauncher(proc=tmp_path).terminate(IMPOSSIBLE_PID, "pipewire", "/onemic/stages/")
 
-    assert "it is not pw-loopback" in caplog.text
+    assert "not a OneMic pipewire" in caplog.text
+
+
+def test_terminate_refuses_the_audio_server_itself(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    fake_process(tmp_path, "pipewire", "/usr/bin/pipewire")
+
+    SubprocessLauncher(proc=tmp_path).terminate(IMPOSSIBLE_PID, "pipewire", "/onemic/stages/")
+
+    assert "not a OneMic pipewire" in caplog.text
 
 
 def test_terminate_ignores_a_process_that_has_gone(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
-    SubprocessLauncher(proc=tmp_path).terminate(IMPOSSIBLE_PID, "pw-loopback")
+    SubprocessLauncher(proc=tmp_path).terminate(IMPOSSIBLE_PID, "pipewire", "/onemic/stages/")
 
     assert "Not stopping" in caplog.text
 

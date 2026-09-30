@@ -8,7 +8,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QSlider, QToolButton, QVBoxLayout, QWidget
 
 from ..domain.levels import SILENCE_DB, LevelThresholds, MeterBallistics, amplitude_to_db
-from ..domain.profile import MAX_GAIN
+from ..domain.profile import DEFAULT_GATE_DB, MAX_GAIN
 from ..domain.waveform import WaveColumn
 from ..services.metering import EMPTY_READING, MeterReading
 from ..services.routing import InputState
@@ -60,6 +60,9 @@ class ChannelRow(QWidget):
     gain_changed = Signal(str, float)
     mute_toggled = Signal(str, bool)
     solo_toggled = Signal(str, bool)
+    low_cut_toggled = Signal(str, bool)
+    gate_toggled = Signal(str, bool)
+    gate_threshold_changed = Signal(str, float)
     remove_requested = Signal(str)
 
     def __init__(
@@ -79,6 +82,7 @@ class ChannelRow(QWidget):
         self._heard_until = -math.inf
         self._last_frame = clock()
         self._state: InputState | None = None
+        self._gate_threshold = DEFAULT_GATE_DB
         self._title = QLabel()
         self._title.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self._peak_colour = ""
@@ -94,6 +98,10 @@ class ChannelRow(QWidget):
         self._peak.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         self.waveform = WaveformView(palette, thresholds, clock=clock)
         self.meter = LevelMeter(palette, thresholds)
+        self._gate = self._filter_button(
+            "G", "Noise gate: silence this input below the threshold on its meter"
+        )
+        self._low_cut = self._filter_button("LC", "Low-cut: remove rumble below 100 Hz")
         self._build_layout()
         self._connect()
 
@@ -116,6 +124,37 @@ class ChannelRow(QWidget):
         self._solo.setChecked(soloed)
         for widget in controls:
             widget.blockSignals(False)
+
+    def set_filters(self, low_cut: bool, gate: bool, gate_threshold_db: float) -> None:
+        """Show an input's low-cut and gate without echoing them back as user changes.
+
+        @param low_cut: True while the low-cut is on.
+        @param gate: True while the gate is on, which shows its threshold on the meter.
+        @param gate_threshold_db: where the gate opens, in dBFS.
+        """
+        self._gate_threshold = gate_threshold_db
+        for button, checked in ((self._low_cut, low_cut), (self._gate, gate)):
+            button.blockSignals(True)
+            button.setChecked(checked)
+            button.blockSignals(False)
+        self.meter.set_gate(gate_threshold_db if gate else None)
+
+    def set_gate_available(self, available: bool) -> None:
+        """Grey out the gate when its plugin is not installed, saying how to get it.
+
+        @param available: False when lsp-plugins is missing.
+        """
+        self._gate.setEnabled(available)
+        if not available:
+            self._gate.setToolTip("Noise gate needs lsp-plugins (sudo pacman -S lsp-plugins-lv2)")
+
+    def set_filterable(self, filterable: bool) -> None:
+        """Show the gate and low-cut only on inputs, since they are part of an input's gain stage.
+
+        @param filterable: False for the mix row.
+        """
+        self._gate.setVisible(filterable)
+        self._low_cut.setVisible(filterable)
 
     def set_soloable(self, soloable: bool) -> None:
         """Show the solo button only on inputs, since soloing the mix itself means nothing.
@@ -179,6 +218,12 @@ class ChannelRow(QWidget):
             self._peak.setStyleSheet(f"color: {colour};")
 
     @staticmethod
+    def _filter_button(text: str, tip: str) -> QToolButton:
+        button = tool_button(text, tip, checkable=True, name="filter")
+        button.setFixedSize(20, 14)
+        return button
+
+    @staticmethod
     def _small_button(button: QToolButton) -> QToolButton:
         button.setFixedSize(20, 18)
         return button
@@ -203,13 +248,29 @@ class ChannelRow(QWidget):
         column.setSpacing(3)
         column.addLayout(controls)
         column.addWidget(self.waveform)
-        column.addWidget(self.meter)
+        meter_line = QHBoxLayout()
+        meter_line.setSpacing(4)
+        meter_line.addWidget(self.meter, 1)
+        meter_line.addWidget(self._gate)
+        meter_line.addWidget(self._low_cut)
+        column.addLayout(meter_line)
 
     def _connect(self) -> None:
         self._slider.valueChanged.connect(self._on_slider)
         self._mute.toggled.connect(lambda muted: self.mute_toggled.emit(self.key, muted))
         self._solo.toggled.connect(lambda soloed: self.solo_toggled.emit(self.key, soloed))
+        self._gate.toggled.connect(self._on_gate)
+        self._low_cut.toggled.connect(lambda low_cut: self.low_cut_toggled.emit(self.key, low_cut))
+        self.meter.threshold_changed.connect(self._on_threshold)
         self._remove.clicked.connect(lambda: self.remove_requested.emit(self.key))
+
+    def _on_gate(self, gate: bool) -> None:
+        self.meter.set_gate(self._gate_threshold if gate else None)
+        self.gate_toggled.emit(self.key, gate)
+
+    def _on_threshold(self, threshold_db: float) -> None:
+        self._gate_threshold = threshold_db
+        self.gate_threshold_changed.emit(self.key, threshold_db)
 
     def _on_slider(self, value: int) -> None:
         self._slider.setToolTip(f"{value}%")

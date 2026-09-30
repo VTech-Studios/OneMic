@@ -7,6 +7,7 @@ from dataclasses import replace
 from onemic.domain.errors import AudioError
 from onemic.domain.graph import Graph, Link, Node, Port
 from onemic.domain.profile import MicProfile
+from onemic.domain.stage import STAGE_MARKER, STAGE_PROGRAM, StageControls
 from onemic.domain.window import WindowState
 
 
@@ -30,6 +31,8 @@ class FakePipeWire:
         self.terminated: list[int] = []
         self.created_mics: list[tuple[str, str]] = []
         self.started_stages: list[tuple[str, str, str]] = []
+        self.stage_controls: dict[int, StageControls] = {}
+        self.started_controls: dict[str, StageControls] = {}
         self.refuse_links_into: set[str] = set()
         self.refuse_mic = False
         self.refuse_snapshots = False
@@ -102,8 +105,9 @@ class FakePipeWire:
         if self.has_node(node_name):
             self.remove_node(node_name)
 
-    def start(self, capture_name: str, playback_name: str, description: str) -> None:
+    def start(self, capture_name: str, playback_name: str, description: str, controls: StageControls) -> None:
         self.started_stages.append((capture_name, playback_name, description))
+        self.started_controls[capture_name] = controls
         pid = next(self._pids)
         self.add_node(capture_name, "Stream/Input/Audio", inputs=2, outputs=2, process_id=pid)
         self.add_node(playback_name, "Stream/Output/Audio", outputs=2, process_id=pid)
@@ -117,8 +121,13 @@ class FakePipeWire:
     def set_muted(self, node_id: int, muted: bool) -> None:
         self.mutes[node_id] = muted
 
-    def terminate(self, pid: int, program: str) -> None:
-        assert program == "pw-loopback"
+    def set_controls(self, node_id: int, controls: StageControls) -> None:
+        if self.refuse_volumes:
+            raise AudioError("pw-cli: node not found")
+        self.stage_controls[node_id] = controls
+
+    def terminate(self, pid: int, program: str, marker: str) -> None:
+        assert (program, marker) == (STAGE_PROGRAM, STAGE_MARKER)
         self.terminated.append(pid)
         for node in [node for node in self.nodes if node.process_id == pid]:
             self._discard(node)
@@ -177,7 +186,7 @@ class FakeLauncher:
     def __init__(self, stream: FakeStream | None = None) -> None:
         self.spawned: list[list[str]] = []
         self.streams: list[list[str]] = []
-        self.terminated: list[tuple[int, str]] = []
+        self.terminated: list[tuple[int, str, str]] = []
         self._stream = stream or FakeStream()
 
     def spawn_detached(self, args: Sequence[str]) -> int:
@@ -188,8 +197,8 @@ class FakeLauncher:
         self.streams.append(list(args))
         return self._stream
 
-    def terminate(self, pid: int, program: str) -> None:
-        self.terminated.append((pid, program))
+    def terminate(self, pid: int, program: str, marker: str) -> None:
+        self.terminated.append((pid, program, marker))
 
 
 class FakeTaps:

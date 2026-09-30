@@ -21,9 +21,12 @@ First release.
 - Smoothly scrolling waveforms and DAW-style level meters for each visible
   input and for the mix, on a decibel scale, coloured ice blue, yellow when
   hot and red where clipped, with a held peak in dBFS.
-  Inputs are metered before going live too, straight from their sources.
+  Inputs are metered before going live too, exactly as they will be sent.
+- Per-input 100 Hz low-cut and noise gate, with the gate threshold dragged
+  on the input's meter. The gate uses lsp-plugins when installed.
 - Listen, to hear exactly what the mic sends through the default output,
-  blocked when it would feed back.
+  or the processed inputs before going live, blocked when it would feed
+  back.
 - Auto-relink: missing links are restored within a second when a device or
   application appears.
 - A small always-on-top window that snaps to screen corners and remembers

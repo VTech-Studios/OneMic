@@ -25,6 +25,7 @@ class Palette:
     clip: str = "#ff4a4a"
     live: str = "#e3342f"
     muted: str = "#c0392b"
+    gate: str = "#e8f7ff"
 
     def level_colour(self, level: Level) -> QColor:
         """Pick the colour that tells the user how close a signal is to clipping.
@@ -56,6 +57,7 @@ def stylesheet(palette: Palette) -> str:
     QPushButton#live:checked {{ background: {palette.live}; border-color: {palette.live}; color: white; }}
     QToolButton:checked {{ background: {palette.ice}; color: {palette.background}; }}
     QToolButton#mute, QToolButton#solo, QToolButton#remove {{ padding: 0; font-weight: bold; }}
+    QToolButton#filter {{ padding: 0; font-size: 7pt; font-weight: bold; }}
     QToolButton#solo:checked {{
         background: {palette.hot}; color: {palette.background}; border-color: {palette.hot};
     }}

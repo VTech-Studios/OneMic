@@ -118,18 +118,20 @@ class SubprocessLauncher:
             raise AudioError(f"{args[0]} started without an output pipe")
         return PipeStream(process, process.stdout)
 
-    def terminate(self, pid: int, program: str) -> None:
-        """Ask a process to stop, but only if it is the expected program.
+    def terminate(self, pid: int, program: str, marker: str) -> None:
+        """Ask a process to stop, but only if it is one of OneMic's own helpers.
 
-        Process ids come from the audio graph. Checking the program first
-        means a stale or unexpected id can never stop something else, such
-        as pipewire-pulse, which owns every virtual mic's node.
+        Process ids come from the audio graph. Gain stages run as the
+        pipewire program, the same as the audio server itself, so the
+        program name alone is not enough: the command line must also carry
+        OneMic's marker, which only its own helpers have.
 
         @param pid: the process id.
         @param program: the executable the process must be running.
+        @param marker: text its command line must contain.
         """
-        if self._program(pid) != program:
-            log.warning("Not stopping process %s: it is not %s", pid, program)
+        if self._program(pid) != program or marker not in self._command_line(pid):
+            log.warning("Not stopping process %s: it is not a OneMic %s", pid, program)
             return
         with contextlib.suppress(ProcessLookupError):
             os.kill(pid, signal.SIGTERM)
@@ -146,6 +148,17 @@ class SubprocessLauncher:
         for pid, child in list(self._children.items()):
             if child.poll() is not None:
                 del self._children[pid]
+
+    def _command_line(self, pid: int) -> str:
+        try:
+            return (
+                (self._proc / str(pid) / "cmdline")
+                .read_bytes()
+                .replace(b"\0", b" ")
+                .decode("utf-8", "replace")
+            )
+        except OSError:
+            return ""
 
     def _program(self, pid: int) -> str | None:
         try:

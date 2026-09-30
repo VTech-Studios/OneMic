@@ -3,10 +3,13 @@ import pytest
 from onemic.domain.errors import ProfileError
 from onemic.domain.profile import (
     MAX_GAIN,
+    MAX_GATE_DB,
     MAX_INPUTS,
+    MIN_GATE_DB,
     InputSettings,
     MicProfile,
     clamp_gain,
+    clamp_gate,
     slugify,
     validate_name,
 )
@@ -105,3 +108,17 @@ def test_mute_wins_over_solo() -> None:
     profile = MicProfile("L", (GUITAR,)).with_input_soloed("g1", True).with_input_muted("g1", True)
 
     assert profile.is_silenced(profile.input("g1"))
+
+
+def test_filters_can_be_switched_and_the_threshold_is_clamped() -> None:
+    profile = MicProfile("L", (VOICE,)).with_input_low_cut("v1", True).with_input_gate("v1", True)
+
+    assert profile.input("v1").low_cut
+    assert profile.input("v1").gate
+    assert profile.with_input_gate_threshold("v1", -90.0).input("v1").gate_threshold_db == MIN_GATE_DB
+    assert profile.with_input_gate_threshold("v1", 0.0).input("v1").gate_threshold_db == MAX_GATE_DB
+    assert profile.with_input_gate_threshold("v1", -33.0).input("v1").gate_threshold_db == -33.0
+
+
+def test_clamp_gate() -> None:
+    assert clamp_gate(-45.0) == -45.0

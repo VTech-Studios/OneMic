@@ -70,7 +70,7 @@ def harness(qtbot: QtBot) -> Iterator[Harness]:
     supervisor = NodeSupervisor(
         graph=wire, mics=wire, stages=wire, launcher=wire, timing=Timing(1, 0), sleep=lambda _: None
     )
-    session = MicSession(graph=wire, supervisor=supervisor, volumes=wire)
+    session = MicSession(graph=wire, supervisor=supervisor, volumes=wire, stages=wire)
     window = MainWindow(Palette(), LevelThresholds(), WindowState())
     qtbot.addWidget(window)
     client = SessionClient(session, wire, LatestJobWorker(), MainThreadDispatcher(window))
@@ -139,12 +139,12 @@ def test_stopping_takes_the_mic_down_and_keeps_only_input_meters(qtbot: QtBot, h
 def test_slider_changes_reach_pipewire_and_are_saved_once(qtbot: QtBot, harness: Harness) -> None:
     harness.controller.start()
     go_live(qtbot, harness)
-    stage = harness.wire.node(NAMES.stage_output("v1")).id
+    stage = harness.wire.node(NAMES.stage_input("v1")).id
 
     for value in (90, 70, 40):
         harness.window._rows["v1"]._slider.setValue(value)
 
-    qtbot.waitUntil(lambda: harness.wire.volumes.get(stage) == 0.4)
+    qtbot.waitUntil(lambda: harness.wire.stage_controls[stage].multiplier == pytest.approx(0.4**3))
     qtbot.waitUntil(lambda: harness.store.saves == 1)
     assert harness.store.profiles[0].inputs[0].gain == 0.4
 

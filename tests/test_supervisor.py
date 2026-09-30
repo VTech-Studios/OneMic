@@ -1,5 +1,6 @@
 from onemic.domain.naming import NodeNames
 from onemic.domain.profile import InputSettings, MicProfile
+from onemic.domain.stage import StageControls
 from onemic.services.supervisor import NodeSupervisor, Timing
 from tests.fakes import FakePipeWire
 
@@ -55,7 +56,9 @@ def test_duplicate_stages_are_stopped_keeping_the_oldest() -> None:
     subject = supervisor(wire, [0.0])
     subject.ensure(LESSON, wire.snapshot())
     original = wire.node(NAMES.stage_output("v1")).process_id
-    wire.start(NAMES.stage_input("v1"), NAMES.stage_output("v1"), "duplicate")
+    wire.start(
+        NAMES.stage_input("v1"), NAMES.stage_output("v1"), "duplicate", StageControls(5.0, 1.0, False, 0.01)
+    )
     duplicate = [node.process_id for node in wire.nodes if node.name == NAMES.stage_output("v1")][1]
 
     subject.ensure(LESSON, wire.snapshot())

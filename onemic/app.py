@@ -12,6 +12,7 @@ from PySide6.QtWidgets import QApplication, QMessageBox
 
 from . import __version__
 from .config import REQUIRED_TOOLS, Config
+from .infrastructure.lv2 import find_lsp_gate
 from .ui.theme import Palette, stylesheet
 from .wiring import build_application
 
@@ -84,6 +85,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     if lock is None:
         QMessageBox.information(None, "OneMic", "OneMic is already open.")
         return 1
-    built = build_application(config, application.quit)
+    built = build_application(config, application.quit, find_lsp_gate(os.environ))
     built.controller.start()
     return application.exec()

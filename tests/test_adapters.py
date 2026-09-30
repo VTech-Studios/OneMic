@@ -1,6 +1,14 @@
 import json
+from pathlib import Path
 
-from onemic.infrastructure.gain_stage import PwLoopbackStages, node_properties
+from onemic.domain.stage import StageControls
+from onemic.infrastructure.gain_stage import (
+    FilterChainStages,
+    PwCliStageControl,
+    control_values,
+    node_properties,
+    stage_config,
+)
 from onemic.infrastructure.taps import PwRecordTaps
 from onemic.infrastructure.virtual_mic import PactlVirtualMic
 from onemic.infrastructure.volume import WpctlVolume
@@ -61,17 +69,54 @@ def test_node_properties_disable_autoconnect_and_quote_safely() -> None:
     assert props == {"node.name": "onemic.a.in.b", "node.description": 'Say "hi"', "node.autoconnect": False}
 
 
-def test_gain_stages_run_as_detached_loopbacks() -> None:
+CONTROLS = StageControls(low_cut_hz=100.0, multiplier=0.5, gate_on=True, gate_threshold=0.01)
+GATE = "http://lsp-plug.in/plugins/lv2/gate_mono"
+
+
+def test_gain_stages_run_as_detached_filter_chains(tmp_path: Path) -> None:
     launcher = FakeLauncher()
 
-    PwLoopbackStages(launcher).start("stage.in", "stage.out", "OneMic Lesson: Voice")
+    FilterChainStages(launcher, tmp_path / "stages", GATE).start("stage.in", "stage.out", "Voice", CONTROLS)
 
-    [args] = launcher.spawned
-    assert args[:3] == ["pw-loopback", "--channels", "2"]
-    assert json.loads(args[args.index("--capture-props") + 1])["node.name"] == "stage.in"
-    playback = json.loads(args[args.index("--playback-props") + 1])
-    assert playback["node.name"] == "stage.out"
-    assert playback["node.description"] == "OneMic Lesson: Voice (out)"
+    config = tmp_path / "stages" / "stage.in.conf"
+    assert launcher.spawned == [["pipewire", "-c", str(config)]]
+    text = config.read_text()
+    assert '"node.name": "stage.in"' in text
+    assert '"node.name": "stage.out"' in text
+    assert '"Freq" = 100.000000' in text
+    assert '"Mult" = 0.500000' in text
+    assert '"enabled" = 1 "gt" = 0.010000' in text
+    assert 'input = "gate:in"' in text
+
+
+def test_the_chain_is_built_without_a_gate_when_the_plugin_is_missing() -> None:
+    config = stage_config("stage.in", "stage.out", "Voice", CONTROLS, gate_plugin=None)
+
+    assert "lv2" not in config
+    assert "gate:" not in config
+
+
+def test_descriptions_are_quoted_safely_in_the_config() -> None:
+    config = stage_config("stage.in", "stage.out", 'Say "hi"', CONTROLS, gate_plugin=None)
+
+    assert 'node.description = "Say \\"hi\\""' in config
+
+
+def test_stage_controls_are_sent_with_pw_cli() -> None:
+    runner = FakeRunner()
+
+    PwCliStageControl(runner, with_gate=True).set_controls(42, CONTROLS)
+
+    [args] = runner.calls
+    assert args[:4] == ["pw-cli", "set-param", "42", "Props"]
+    assert args[4] == (
+        '{ params = [ "lowcut:Freq" 100.000000 "gain:Mult" 0.500000 '
+        '"gate:enabled" 1.000000 "gate:gt" 0.010000 ] }'
+    )
+
+
+def test_gate_controls_are_left_out_without_the_plugin() -> None:
+    assert control_values(CONTROLS, with_gate=False) == {"lowcut:Freq": 100.0, "gain:Mult": 0.5}
 
 
 def test_taps_record_raw_float_stereo_without_autolinking() -> None:

@@ -42,7 +42,7 @@ def test_the_live_switch_shows_the_real_state(qtbot: QtBot) -> None:
     header.show_status(live=False, listening=False, listen_blocked=False)
 
     assert header._live.text() == OFF_TEXT
-    assert not header._listen.isEnabled()
+    assert header._listen.isEnabled()
     assert header._listen.toolTip() == LISTEN_OFF_TIP
 
 

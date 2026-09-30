@@ -9,7 +9,7 @@ LESSON = MicProfile(
     "Guitar Lesson",
     (
         InputSettings("a1", "REAPER", "REAPER", 0.8, soloed=True),
-        InputSettings("b2", "mic2", "Voice", muted=True),
+        InputSettings("b2", "mic2", "Voice", muted=True, low_cut=True, gate=True, gate_threshold_db=-38.0),
     ),
     gain=0.9,
 )

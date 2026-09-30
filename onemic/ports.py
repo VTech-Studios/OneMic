@@ -5,6 +5,7 @@ from typing import Protocol
 
 from .domain.graph import Graph, Link
 from .domain.profile import MicProfile
+from .domain.stage import StageControls
 from .domain.window import WindowState
 
 
@@ -53,11 +54,12 @@ class ProcessLauncher(Protocol):
         """
         ...
 
-    def terminate(self, pid: int, program: str) -> None:
-        """Ask a process to stop, but only if it is the expected program.
+    def terminate(self, pid: int, program: str, marker: str) -> None:
+        """Ask a process to stop, but only if it is one of OneMic's own helpers.
 
         @param pid: the process id.
         @param program: the executable the process must be running.
+        @param marker: text its command line must contain.
         """
         ...
 
@@ -124,12 +126,23 @@ class VolumeControl(Protocol):
 
 
 class GainStageDriver(Protocol):
-    def start(self, capture_name: str, playback_name: str, description: str) -> None:
-        """Start a gain stage: a node pair whose volume sits between a source and a mic.
+    def start(self, capture_name: str, playback_name: str, description: str, controls: StageControls) -> None:
+        """Start a gain stage: a node pair that processes a source on its way to a mic.
 
         @param capture_name: node name for the side that receives the source.
         @param playback_name: node name for the side that feeds the mic.
         @param description: the name shown in patchbays such as qpwgraph.
+        @param controls: the stage's starting low-cut, gain and gate values.
+        """
+        ...
+
+
+class StageControl(Protocol):
+    def set_controls(self, node_id: int, controls: StageControls) -> None:
+        """Change a running stage's low-cut, gain and gate.
+
+        @param node_id: the id of the stage's capture node.
+        @param controls: the values to send.
         """
         ...
 

@@ -1,7 +1,9 @@
+from PySide6.QtCore import QPoint, Qt
+from PySide6.QtTest import QTest
 from pytestqt.qtbot import QtBot
 
 from onemic.domain.levels import Level, LevelThresholds
-from onemic.ui.level_meter import LevelMeter, zones
+from onemic.ui.level_meter import LevelMeter, fraction_to_db, zones
 from onemic.ui.theme import Palette
 
 
@@ -29,3 +31,44 @@ def test_the_meter_repaints_only_when_the_level_changes(qtbot: QtBot) -> None:
 
     assert (meter._level_db, meter._hold_db) == (-12.0, -6.0)
     assert not meter.grab().isNull()
+
+
+def test_the_gate_marker_is_dragged_to_a_threshold(qtbot: QtBot) -> None:
+    meter = LevelMeter(Palette(), LevelThresholds())
+    qtbot.addWidget(meter)
+    meter.resize(120, 10)
+    meter.show()
+    meter.set_gate(-45.0)
+
+    with qtbot.waitSignal(meter.threshold_changed) as moved:
+        QTest.mouseClick(meter, Qt.MouseButton.LeftButton, pos=QPoint(60, 5))
+
+    assert moved.args == [-30.0]
+
+
+def test_the_marker_cannot_be_dragged_while_the_gate_is_off(qtbot: QtBot) -> None:
+    meter = LevelMeter(Palette(), LevelThresholds())
+    qtbot.addWidget(meter)
+    meter.resize(120, 10)
+    meter.show()
+
+    with qtbot.assertNotEmitted(meter.threshold_changed):
+        QTest.mouseClick(meter, Qt.MouseButton.LeftButton, pos=QPoint(60, 5))
+
+
+def test_dragged_thresholds_stay_in_the_useful_range(qtbot: QtBot) -> None:
+    meter = LevelMeter(Palette(), LevelThresholds())
+    qtbot.addWidget(meter)
+    meter.resize(120, 10)
+    meter.show()
+    meter.set_gate(-45.0)
+
+    with qtbot.waitSignal(meter.threshold_changed) as moved:
+        QTest.mouseClick(meter, Qt.MouseButton.LeftButton, pos=QPoint(119, 5))
+
+    assert moved.args == [-10.0]
+
+
+def test_fraction_to_db_is_the_inverse_of_the_meter_scale() -> None:
+    assert fraction_to_db(0.5) == -30.0
+    assert fraction_to_db(2.0) == 0.0
