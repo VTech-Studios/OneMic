@@ -32,8 +32,8 @@ def test_a_short_chunk_still_makes_one_column() -> None:
     assert len(split_columns(np.zeros((100, 2), dtype=np.float32), 512, 1.0, 48000)) == 1
 
 
-def test_display_edges_use_the_decibel_scale() -> None:
-    assert WaveColumn(-1.0, 0.001).display == pytest.approx((-1.0, 0.0))
+def test_display_edges_are_linear_and_held_at_full_scale() -> None:
+    assert WaveColumn(-1.4, 0.02).display == pytest.approx((-1.0, 0.02))
 
 
 def test_peak_is_the_larger_excursion_either_side_of_zero() -> None:

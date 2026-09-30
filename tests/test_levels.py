@@ -10,7 +10,6 @@ from onemic.domain.levels import (
     PeakHold,
     amplitude_to_db,
     db_to_fraction,
-    display_height,
 )
 
 
@@ -85,12 +84,6 @@ def test_peak_hold_reset_forgets_the_peak() -> None:
 )
 def test_db_to_fraction(db: float, fraction: float) -> None:
     assert db_to_fraction(db) == fraction
-
-
-def test_display_height_keeps_the_sign() -> None:
-    assert display_height(0.5) == pytest.approx(0.8997, abs=1e-3)
-    assert display_height(-0.5) == pytest.approx(-0.8997, abs=1e-3)
-    assert display_height(0.0) == 0.0
 
 
 def test_meter_rises_instantly_and_falls_steadily() -> None:

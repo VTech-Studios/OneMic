@@ -42,8 +42,8 @@ def place(columns: Sequence[WaveColumn], width: int, now: float, speed: float) -
 def _outline(run: Sequence[Placed], middle: float) -> QPolygonF:
     """Trace the shape of a run of columns: along the highs, then back along the lows.
 
-    Heights use the same decibel scale as the level meter, so a normal
-    speaking voice fills a good part of the lane rather than a sliver.
+    Heights are linear, as in a DAW's recording lane, so the shape shows
+    the real signal and the level meter below shows how loud it is.
 
     @param run: placed columns, left to right.
     @param middle: the y position of silence.

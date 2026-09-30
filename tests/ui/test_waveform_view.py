@@ -50,13 +50,13 @@ def test_shapes_split_where_the_level_changes_and_meet_without_gaps() -> None:
     assert first_run_right_edge == placed[2][0]
 
 
-def test_quiet_audio_is_drawn_on_the_decibel_scale() -> None:
-    placed = [(10.0, WaveColumn(-0.03, 0.03))]
+def test_quiet_room_noise_stays_close_to_the_centre_line() -> None:
+    placed = [(10.0, WaveColumn(-0.02, 0.02))]
 
     [(_, shape)] = waveform_shapes(placed, height=30, thresholds=LevelThresholds())
 
     tallest = max(point.y() for point in points(shape)) - min(point.y() for point in points(shape))
-    assert tallest > 10
+    assert tallest < 3
 
 
 def test_silence_still_draws_a_line() -> None:

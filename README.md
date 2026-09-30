@@ -2,7 +2,7 @@
 
 Blend any audio signals on Linux into one virtual microphone.
 
-![OneMic live, showing a voice mic, REAPER and the combined mix with ice blue, yellow and red waveforms](media/onemic.png)
+![OneMic set up with both Scarlett 2i2 inputs, the second gated and showing speech on its waveform](media/onemic-preview.png)
 
 Browsers, and so every web call (Meet, Jitsi, Tutorful, Discord in the browser), let a site pick exactly
 one microphone. An audio interface shows up as several separate inputs, and an amp-sim guitar is not on
@@ -156,8 +156,9 @@ quick way to send only your guitar for a moment. Solo is saved with the mic, lik
 
 The meter is the live part: it jumps the instant a sound starts and falls back smoothly, with a white
 tick marking the recent peak, just like a DAW's track meter. The waveform shows the last few seconds
-scrolling past. Both use a decibel scale from -60 dBFS to full scale, the way DAW meters do, so a voice
-at a normal speaking level fills a good part of the lane rather than a sliver.
+scrolling past. As in REAPER, the waveform is linear, so quiet room noise stays close to the centre line
+and only real playing or speech makes a shape, while the meter uses a decibel scale from -60 dBFS to full
+scale, so you can still see how loud that room noise is.
 
 | Colour | Peak | Meaning |
 | --- | --- | --- |

@@ -6,8 +6,6 @@ from functools import cached_property
 import numpy as np
 import numpy.typing as npt
 
-from .levels import display_height
-
 Samples = npt.NDArray[np.float32]
 
 
@@ -34,13 +32,13 @@ class WaveColumn:
     def display(self) -> tuple[float, float]:
         """Work out where the column is drawn, once, since a column never changes.
 
-        Every frame redraws every visible column, and recalculating
-        decibels for each one sixty times a second is most of the cost of
-        drawing.
+        The waveform is linear, as a DAW draws it, so quiet room noise stays
+        close to the centre line and only real playing or speech makes a
+        shape. Clipped samples are held at the edge of the lane.
 
-        @return: the low and high edges on the decibel display scale.
+        @return: the low and high edges, each between -1.0 and 1.0.
         """
-        return display_height(self.low), display_height(self.high)
+        return max(self.low, -1.0), min(self.high, 1.0)
 
 
 SILENT_COLUMN = WaveColumn(0.0, 0.0)

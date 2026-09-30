@@ -33,24 +33,14 @@ DISPLAY_FLOOR_DB = -60.0
 def db_to_fraction(db: float, floor_db: float = DISPLAY_FLOOR_DB) -> float:
     """Place a level on a display that is linear in decibels.
 
-    Meters and waveforms both use this scale, as DAW meters do, so quiet
-    signals such as a voice at -30 dBFS fill a useful part of the display
-    instead of a sliver next to the silence line.
+    Level meters use this scale, as DAW meters do, so the quiet half of the
+    range stays readable instead of being squashed at the left.
 
     @param db: the level in dBFS.
     @param floor_db: the level shown as empty.
     @return: 0.0 at the floor to 1.0 at full scale, clamped.
     """
     return min(max((db - floor_db) / -floor_db, 0.0), 1.0)
-
-
-def display_height(sample: float) -> float:
-    """Scale a signed sample for drawing, keeping its sign.
-
-    @param sample: a sample value, where 1.0 is full scale.
-    @return: -1.0 to 1.0, linear in decibels between the display floor and full scale.
-    """
-    return math.copysign(db_to_fraction(amplitude_to_db(abs(sample))), sample)
 
 
 @dataclass(frozen=True)
