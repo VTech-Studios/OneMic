@@ -78,14 +78,14 @@ dragging and corner snapping will not work there.
 
 - Linux with PipeWire, `pipewire-pulse` and WirePlumber
 - Python 3.12 or newer
-- `python-pyside6` 6.11 or newer
+- `pyside6` 6.11 or newer
 - `python-numpy`
 - Optional: `lsp-plugins-lv2`, for the noise gate
 
 On Arch Linux:
 
 ```bash
-sudo pacman -S pipewire pipewire-pulse wireplumber python-pyside6 python-numpy python-pipx lsp-plugins-lv2
+sudo pacman -S pipewire pipewire-pulse wireplumber pyside6 python-numpy python-pipx lsp-plugins-lv2
 ```
 
 PipeWire has a built-in noise gate, but the one in current releases measures its own output, so once it
@@ -99,7 +99,7 @@ If you use a DAW through JACK, install `pipewire-jack` as well so it appears in 
 ### From a release
 
 Download the wheel (`onemic-<version>-py3-none-any.whl`) from the
-[releases page](https://github.com/LukeMcCann/onemic/releases), then:
+[releases page](https://github.com/VTech-Studios/OneMic/releases), then:
 
 ```bash
 pipx install --system-site-packages onemic-1.0.0-py3-none-any.whl
@@ -113,7 +113,7 @@ installed. To upgrade later, install the newer wheel with `pipx install --force`
 Clone the repository and install it in editable mode:
 
 ```bash
-git clone https://github.com/LukeMcCann/onemic.git
+git clone https://github.com/VTech-Studios/OneMic.git onemic
 cd onemic
 pipx install --system-site-packages --editable .
 ```

@@ -34,5 +34,5 @@ First release.
 - A choice on closing while live: keep the mic running for the call, or stop
   it. A mic left live is picked up again on the next start.
 
-[Unreleased]: https://github.com/LukeMcCann/onemic/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/LukeMcCann/onemic/releases/tag/v1.0.0
+[Unreleased]: https://github.com/VTech-Studios/OneMic/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/VTech-Studios/OneMic/releases/tag/v1.0.0
